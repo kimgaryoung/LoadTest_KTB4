@@ -43,6 +43,7 @@ class AuthService {
       const response = await api.post('/api/auth/login', credentials, {
         skipAuth: true,
         handleAuthError: false,
+        retry: false,
       });
 
       if (response.data?.success && response.data?.token) {
@@ -101,7 +102,10 @@ class AuthService {
    */
   async register(userData) {
     try {
-      const response = await api.post('/api/auth/register', userData);
+      const response = await api.post('/api/auth/register', userData, {
+        skipAuth: true,
+        retry: false,
+      });
 
       if (response.data?.success) {
         return response.data;

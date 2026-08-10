@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { ErrorCircleIcon, CheckCircleIcon } from '@vapor-ui/icons';
+import { ErrorCircleIcon } from '@vapor-ui/icons';
 import {
     Box,
     Button,
@@ -22,7 +22,6 @@ const Register = () => {
     confirmPassword: ''
   });
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { register: registerContext } = useAuth();
@@ -46,18 +45,13 @@ const Register = () => {
 
     setLoading(true);
     setError(null);
-    setSuccess(false);
 
     try {
       const { name, email, password } = formData;
       await registerContext({ name, email, password });
-      
-      setSuccess(true);
-      setLoading(false);
-      
-      setTimeout(() => {
-        router.push('/login');
-      }, 1000);
+
+      // 가입 성공 후 인위적인 대기 없이 로그인 진입점으로 즉시 이동한다.
+      await router.replace('/login');
     } catch (err) {
       setError(err.message || '회원가입 처리 중 오류가 발생했습니다.');
       setLoading(false);
@@ -86,15 +80,6 @@ const Register = () => {
               <ErrorCircleIcon />
             </Callout.Icon>
             {error}
-          </Callout.Root>
-        )}
-
-        {success && (
-          <Callout.Root colorPalette="success" data-testid="register-success-message">
-            <Callout.Icon>
-              <CheckCircleIcon />
-            </Callout.Icon>
-            가입성공, 로그인 해 주세요.
           </Callout.Root>
         )}
 
