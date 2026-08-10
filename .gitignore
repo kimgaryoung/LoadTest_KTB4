@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+target/
+dist/
+build/
+out/
+coverage/
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.*.example
+
+# Test and load-test outputs
+test-results/
+playwright-report/
+blob-report/
+*.log
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+
+# Local runtime data
+uploads/
+
+# Local agent guidance and analysis
+AGENTS.md
+PROJECT_ANALYSIS.md
+PERFORMANCE_IMPROVEMENT_PLAN.md
+LOGIN_PERFORMANCE_PLAN.md
