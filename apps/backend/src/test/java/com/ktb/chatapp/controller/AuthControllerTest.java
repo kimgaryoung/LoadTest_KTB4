@@ -4,6 +4,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.ktb.chatapp.config.MongoTestContainer;
 import com.ktb.chatapp.dto.LoginRequest;
 import com.ktb.chatapp.dto.RegisterRequest;
+import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.SessionCreationResult;
 import com.ktb.chatapp.service.SessionMetadata;
 import com.ktb.chatapp.service.SessionService;
@@ -16,10 +17,15 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +45,9 @@ public class AuthControllerTest {
 
     @MockitoBean
     private SessionService sessionService;
+
+    @MockitoSpyBean
+    private UserRepository userRepository;
 
     @Test
     @WithAnonymousUser
@@ -108,11 +117,18 @@ public class AuthControllerTest {
 
         LoginRequest loginRequest = new LoginRequest(email, "password");
 
+        clearInvocations(userRepository, sessionService);
+
         mockMvc.perform(post("/api/auth/login")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").exists());
+
+        verify(userRepository, times(1)).findByEmail(email.toLowerCase());
+        verify(sessionService, never()).removeAllUserSessions(any(String.class));
+        verify(sessionService, times(1))
+                .createSession(any(String.class), any(SessionMetadata.class));
     }
 }
