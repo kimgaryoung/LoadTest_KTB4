@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnProperty(name = "socketio.store", havingValue = "redis")
 public class RedissonConfig {
 

@@ -4,6 +4,7 @@ import com.ktb.chatapp.model.Session;
 import com.ktb.chatapp.service.session.SessionStore;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.convert.DurationStyle;
@@ -17,6 +18,8 @@ import static com.ktb.chatapp.model.Session.SESSION_TTL;
 public class SessionService {
 
     private final SessionStore sessionStore;
+    private static final long VALIDATION_CACHE_MILLIS = 1_000L;
+    private final ConcurrentHashMap<String, CachedSession> validationCache = new ConcurrentHashMap<>();
     public static final long SESSION_TTL_SEC = DurationStyle.detectAndParse(SESSION_TTL).getSeconds();
     private static final long SESSION_TIMEOUT = SESSION_TTL_SEC * 1000;
 
@@ -74,6 +77,13 @@ public class SessionService {
                 return SessionValidationResult.invalid("INVALID_PARAMETERS", "유효하지 않은 세션 파라미터");
             }
 
+            long now = Instant.now().toEpochMilli();
+            String cacheKey = userId + ":" + sessionId;
+            CachedSession cached = validationCache.get(cacheKey);
+            if (cached != null && now - cached.validatedAt() < VALIDATION_CACHE_MILLIS) {
+                return SessionValidationResult.valid(cached.sessionData());
+            }
+
             Session session = sessionStore.findByUserId(userId).orElse(null);
             
             if (session == null) {
@@ -87,7 +97,6 @@ public class SessionService {
             }
 
             // Check if session has timed out
-            long now = Instant.now().toEpochMilli();
             if (now - session.getLastActivity() > SESSION_TIMEOUT) {
                 log.warn("Session timed out for userId: {}, sessionId: {}", userId, sessionId);
                 removeSession(userId, sessionId);
@@ -100,6 +109,7 @@ public class SessionService {
             session = sessionStore.save(session);
 
             SessionData sessionData = toSessionData(session);
+            validationCache.put(cacheKey, new CachedSession(sessionData, now));
             return SessionValidationResult.valid(sessionData);
 
         } catch (Exception e) {
@@ -132,6 +142,7 @@ public class SessionService {
 
     public void removeSession(String userId, String sessionId) {
         try {
+            invalidateCache(userId, sessionId);
             if (sessionId != null) {
                 sessionStore.delete(userId, sessionId);
             } else {
@@ -149,12 +160,27 @@ public class SessionService {
 
     public void removeAllUserSessions(String userId) {
         try {
+            invalidateCache(userId, null);
             sessionStore.deleteAll(userId);
         } catch (Exception e) {
             log.error("Remove all sessions error for userId: {}", userId, e);
             throw new RuntimeException("모든 세션 삭제 중 오류가 발생했습니다.", e);
         }
     }
+
+    private void invalidateCache(String userId, String sessionId) {
+        if (userId == null) {
+            return;
+        }
+        if (sessionId != null) {
+            validationCache.remove(userId + ":" + sessionId);
+        } else {
+            String prefix = userId + ":";
+            validationCache.keySet().removeIf(key -> key.startsWith(prefix));
+        }
+    }
+
+    private record CachedSession(SessionData sessionData, long validatedAt) {}
 
     public SessionData getActiveSession(String userId) {
         try {
