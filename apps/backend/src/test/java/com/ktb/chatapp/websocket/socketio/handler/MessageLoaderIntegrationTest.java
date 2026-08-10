@@ -1,6 +1,7 @@
 package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.ktb.chatapp.config.MongoTestContainer;
+import com.ktb.chatapp.config.MongoIndexConfiguration;
 import com.ktb.chatapp.config.RedisTestContainer;
 import com.ktb.chatapp.dto.FetchMessagesRequest;
 import com.ktb.chatapp.dto.FetchMessagesResponse;
@@ -12,8 +13,10 @@ import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
+import org.bson.Document;
 import net.datafaker.Faker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -47,6 +51,9 @@ class MessageLoaderIntegrationTest {
     @Autowired
     private FileRepository fileRepository;
 
+    @Autowired
+    private MongoTemplate mongoTemplate;
+
     @MockitoSpyBean
     private MessageReadStatusService messageReadStatusService;
 
@@ -55,6 +62,23 @@ class MessageLoaderIntegrationTest {
     private String roomId;
     private String userId;
     private LocalDateTime baseTime;
+
+    @Test
+    @DisplayName("메시지 방·시간 복합 인덱스가 실제 MongoDB에 생성된다")
+    void messageRoomTimestampIndex_shouldBeCreated() {
+        List<Document> indexes = mongoTemplate.getCollection("messages")
+                .listIndexes()
+                .into(new ArrayList<>());
+
+        Document index = indexes.stream()
+                .filter(candidate -> MongoIndexConfiguration.MESSAGE_ROOM_TIMESTAMP_INDEX
+                        .equals(candidate.getString("name")))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(index.get("key", Document.class))
+                .isEqualTo(new Document("room", 1).append("timestamp", -1));
+    }
 
     @BeforeEach
     void setUp() {
