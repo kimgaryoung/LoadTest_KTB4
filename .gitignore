@@ -1,0 +1,13 @@
+# Local-only performance/load-test helpers and outputs
+/loadtest/baseline/
+/loadtest/results/
+/loadtest/run-baseline.sh
+
+# Local development artifacts
+.DS_Store
+/node_modules/
+/apps/backend/target/
+/apps/backend/.env
+/apps/frontend/node_modules/
+/apps/frontend/.next/
+/apps/frontend/.env.local
