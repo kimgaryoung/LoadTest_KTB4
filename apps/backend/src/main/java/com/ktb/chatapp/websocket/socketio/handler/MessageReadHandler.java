@@ -14,6 +14,8 @@ import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import java.util.Map;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,6 +38,8 @@ public class MessageReadHandler {
     private final MessageRepository messageRepository;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
+    private static final long DUPLICATE_READ_WINDOW_MILLIS = 1_000L;
+    private final ConcurrentHashMap<String, Long> recentReadRequests = new ConcurrentHashMap<>();
     
     @OnEvent(MARK_MESSAGES_AS_READ)
     public void handleMarkAsRead(SocketIOClient client, MarkAsReadRequest data) {
@@ -49,18 +53,28 @@ public class MessageReadHandler {
             if (data == null || data.getMessageIds() == null || data.getMessageIds().isEmpty()) {
                 return;
             }
+
+            List<String> messageIds = data.getMessageIds().stream()
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .limit(100)
+                    .toList();
+            if (messageIds.isEmpty()) {
+                return;
+            }
+
+            String duplicateKey = userId + ":" + messageIds.getFirst();
+            long now = System.currentTimeMillis();
+            Long previous = recentReadRequests.put(duplicateKey, now);
+            if (previous != null && now - previous < DUPLICATE_READ_WINDOW_MILLIS) {
+                return;
+            }
             
-            String roomId = messageRepository.findById(data.getMessageIds().getFirst())
+            String roomId = messageRepository.findById(messageIds.getFirst())
                     .map(Message::getRoomId).orElse(null);
             
             if (roomId == null || roomId.isBlank()) {
                 client.sendEvent(ERROR, Map.of("message", "Invalid room"));
-                return;
-            }
-
-            User user = userRepository.findById(userId).orElse(null);
-            if (user == null) {
-                client.sendEvent(ERROR, Map.of("message", "User not found"));
                 return;
             }
 
@@ -70,9 +84,9 @@ public class MessageReadHandler {
                 return;
             }
             
-            messageReadStatusService.updateReadStatus(data.getMessageIds(), userId);
+            messageReadStatusService.updateReadStatus(messageIds, userId);
 
-            MessagesReadResponse response = new MessagesReadResponse(userId, data.getMessageIds());
+            MessagesReadResponse response = new MessagesReadResponse(userId, messageIds);
 
             // Broadcast to room
             socketIOServer.getRoomOperations(roomId)
