@@ -22,6 +22,7 @@ import org.springframework.data.domain.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,6 +120,10 @@ class MessageLoaderTest {
         // 시간순 정렬 확인 (오름차순: 오래된 것 → 최신 것)
         // [50시간 전, 49시간 전, ..., 21시간 전]
         verifyAscending(result);
+
+        // 동일 발신자의 메시지가 여러 개여도 사용자 조회는 배치당 한 번만 수행한다.
+        verify(userRepository).findAllById(Set.of(userId));
+        verify(userRepository, never()).findById(anyString());
     }
     
     private static @NotNull Page<Message> getMessagePage(List<Message> first30Messages) {
