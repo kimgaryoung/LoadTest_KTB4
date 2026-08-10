@@ -16,6 +16,7 @@ import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.util.BannedWordChecker;
 import com.ktb.chatapp.websocket.socketio.ai.AiService;
 import com.ktb.chatapp.service.RoomActivityNotifier;
+import com.ktb.chatapp.service.ChatBackgroundTasks;
 import com.ktb.chatapp.service.SessionService;
 import com.ktb.chatapp.service.SessionValidationResult;
 import com.ktb.chatapp.service.RateLimitService;
@@ -31,6 +32,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 
@@ -50,6 +53,15 @@ public class ChatMessageHandler {
     private final BannedWordChecker bannedWordChecker;
     private final RateLimitService rateLimitService;
     private final MeterRegistry meterRegistry;
+    private volatile ChatBackgroundTasks chatBackgroundTasks;
+
+    @Value("${chat.ai.enabled:false}")
+    private boolean aiEnabled;
+
+    @Autowired(required = false)
+    void setChatBackgroundTasks(ChatBackgroundTasks chatBackgroundTasks) {
+        this.chatBackgroundTasks = chatBackgroundTasks;
+    }
     
     @OnEvent(CHAT_MESSAGE)
     public void handleChatMessage(SocketIOClient client, ChatMessageRequest data) {
@@ -166,14 +178,18 @@ public class ChatMessageHandler {
 
             socketIOServer.getRoomOperations(roomId)
                     .sendEvent(MESSAGE, messageResponse);
-            client.sendEvent(MESSAGE, messageResponse);
 
             roomActivityNotifier.notifyMessageStored(roomId);
 
             // AI 멘션 처리
-            aiService.handleAIMentions(roomId, socketUser.id(), messageContent);
-
-            sessionService.updateLastActivity(socketUser.id());
+            if (aiEnabled && !messageContent.aiMentions().isEmpty()) {
+                ChatBackgroundTasks backgroundTasks = chatBackgroundTasks;
+                if (backgroundTasks != null) {
+                    backgroundTasks.handleAiMentions(roomId, socketUser.id(), messageContent);
+                } else {
+                    aiService.handleAIMentions(roomId, socketUser.id(), messageContent);
+                }
+            }
 
             // Record success metrics
             recordMessageSuccess(messageType);

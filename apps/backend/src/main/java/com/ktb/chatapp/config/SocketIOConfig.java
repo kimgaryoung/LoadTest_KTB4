@@ -55,10 +55,10 @@ public class SocketIOConfig {
         
         var socketConfig = new SocketConfig();
         socketConfig.setReuseAddress(true);
-        socketConfig.setTcpNoDelay(false);
-        socketConfig.setAcceptBackLog(10);
-        socketConfig.setTcpSendBufferSize(4096);
-        socketConfig.setTcpReceiveBufferSize(4096);
+        socketConfig.setTcpNoDelay(true);
+        socketConfig.setAcceptBackLog(512);
+        socketConfig.setTcpSendBufferSize(65536);
+        socketConfig.setTcpReceiveBufferSize(65536);
         config.setSocketConfig(socketConfig);
 
         config.setOrigin(origin);

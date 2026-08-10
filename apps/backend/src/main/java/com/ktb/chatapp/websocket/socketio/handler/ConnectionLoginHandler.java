@@ -8,7 +8,6 @@ import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -94,9 +93,6 @@ public class ConnectionLoginHandler {
                 return;
             }
             
-            userRooms.get(userId).forEach(roomId -> {
-                roomLeaveHandler.handleLeaveRoom(client, roomId);
-            });
             String socketId = client.getSessionId().toString();
             
             // 해당 사용자의 현재 활성 연결인 경우에만 정리
@@ -107,6 +103,9 @@ public class ConnectionLoginHandler {
                 log.warn("Socket.IO disconnect: User {} has a different active connection. Skipping cleanup.", userId);
             }
 
+            // A transport disconnect is not a business-level room leave.
+            // Retaining membership prevents reconnect storms from generating
+            // room writes, system messages and participant broadcasts.
             client.leaveRooms(Set.of("user:" + userId, "room-list"));
             client.del("user");
             client.disconnect();
@@ -159,17 +158,12 @@ public class ConnectionLoginHandler {
                 "timestamp", System.currentTimeMillis()
         ));
         
-        new Thread(() -> {
-            try {
-                Thread.sleep(Duration.ofSeconds(10));
-                existingClient.sendEvent(SESSION_ENDED, Map.of(
-                        "reason", "duplicate_login",
-                        "message", "다른 기기에서 로그인하여 현재 세션이 종료되었습니다."
-                ));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Error in duplicate login notification thread", e);
-            }
-        }).start();
+        // Do not create one sleeping platform thread per duplicate login.
+        // The client receives the explicit termination event immediately and
+        // can close/reconnect according to its normal session policy.
+        existingClient.sendEvent(SESSION_ENDED, Map.of(
+                "reason", "duplicate_login",
+                "message", "다른 기기에서 로그인하여 현재 세션이 종료되었습니다."
+        ));
     }
 }
