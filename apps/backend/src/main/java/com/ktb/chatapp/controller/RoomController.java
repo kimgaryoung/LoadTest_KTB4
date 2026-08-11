@@ -5,7 +5,6 @@ import com.ktb.chatapp.dto.*;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
-import com.ktb.chatapp.service.RecentMessageCounter;
 import com.ktb.chatapp.service.RoomService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,7 +38,6 @@ import org.springframework.web.bind.annotation.*;
 public class RoomController {
 
     private final UserRepository userRepository;
-    private final RecentMessageCounter recentMessageCounter;
     private final RoomService roomService;
 
     @Value("${spring.profiles.active:production}")
@@ -297,8 +295,6 @@ public class RoomController {
 
         boolean isCreator = room.getCreator().equals(name);
 
-        int recentMessageCount = recentMessageCounter.countRecentMessages(room.getId());
-
         return RoomResponse.builder()
                 .id(room.getId())
                 .name(room.getName())
@@ -307,7 +303,6 @@ public class RoomController {
                 .participants(participantSummaries)
                 .createdAtDateTime(room.getCreatedAt() != null ? room.getCreatedAt() : LocalDateTime.now())
                 .isCreator(isCreator)
-                .recentMessageCount((int) recentMessageCount)
                 .build();
     }
 }

@@ -106,12 +106,6 @@ public final class SocketIOEvents {
     public static final String ROOM_UPDATE = "roomUpdated";
 
     /**
-     * 채팅방 활성도 업데이트 (목록 화면 갱신용)
-     * Payload: { _id, recentMessageCount }
-     */
-    public static final String ROOM_ACTIVITY = "roomActivity";
-    
-    /**
      * 메시지 읽음 상태 업데이트
      * Payload: { userId, messageIds }
      */

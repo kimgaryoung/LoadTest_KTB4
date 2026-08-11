@@ -3,7 +3,6 @@ package com.ktb.chatapp.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
@@ -16,7 +15,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +28,6 @@ class RoomServicePaginationTest {
 
     @Mock private RoomRepository roomRepository;
     @Mock private UserRepository userRepository;
-    @Mock private RecentMessageCounter recentMessageCounter;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ApplicationEventPublisher eventPublisher;
 
@@ -42,7 +39,6 @@ class RoomServicePaginationTest {
         roomService = new RoomService(
                 roomRepository,
                 userRepository,
-                recentMessageCounter,
                 new RoomCursorCodec(),
                 passwordEncoder,
                 eventPublisher);
@@ -58,8 +54,6 @@ class RoomServicePaginationTest {
                     .build());
         }
 
-        when(recentMessageCounter.countRecentMessagesByRoomIds(anyCollection()))
-                .thenReturn(Map.of());
         when(roomRepository.findPageAfter(org.mockito.ArgumentMatchers.nullable(LocalDateTime.class),
                 org.mockito.ArgumentMatchers.nullable(String.class), anyInt()))
                 .thenAnswer(invocation -> {

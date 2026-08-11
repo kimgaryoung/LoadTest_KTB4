@@ -57,18 +57,6 @@ export const useRoomsSocket = ({
               )
             );
           },
-          // 활성도 지표만 담긴 경량 payload이므로 방 정보를 덮지 않고 병합한다
-          roomActivity: (activity) => {
-            if (!activity?._id) return;
-
-            setRooms((prev) =>
-              prev.map((room) =>
-                room._id === activity._id
-                  ? { ...room, recentMessageCount: activity.recentMessageCount }
-                  : room
-              )
-            );
-          },
         };
 
         Object.entries(handlers).forEach(([event, handler]) => {
