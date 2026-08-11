@@ -1,19 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   appendIncomingMessage,
+  appendIncomingNormalizedMessage,
   applyReadReceipts,
+  applyReadReceiptsToNormalizedMessages,
   createRoomEventHandlers,
   processLoadedRoomMessages,
 } from '../roomEventHandlers';
+import { normalizeMessages, selectMessagesArray } from '../../messages/normalizedMessages';
 
 describe('roomEventHandlers', () => {
   it('processes loaded messages through the shared message list reducer', () => {
     const processedMessageIds = { current: new Set(['message-1']) };
     const initialLoadCompletedRef = { current: false };
+    const normalizedMessages = normalizeMessages([
+      { _id: 'message-1', timestamp: '2026-07-07T00:00:02.000Z' },
+    ]);
     const setMessages = vi.fn(updater => {
       const currentMessages = [{ _id: 'message-1', timestamp: '2026-07-07T00:00:02.000Z' }];
       return updater(currentMessages);
     });
+    const setNormalizedMessages = vi.fn();
     const setHasMoreMessages = vi.fn();
 
     const result = processLoadedRoomMessages({
@@ -24,12 +31,18 @@ describe('roomEventHandlers', () => {
       hasMore: false,
       isInitialLoad: true,
       processedMessageIds,
+      normalizedMessages,
       setMessages,
+      setNormalizedMessages,
       setHasMoreMessages,
       initialLoadCompletedRef,
     });
 
     expect(result.map(message => message._id)).toEqual(['message-2', 'message-1']);
+    expect(selectMessagesArray(setNormalizedMessages.mock.calls[0][0]).map(message => message._id)).toEqual([
+      'message-2',
+      'message-1',
+    ]);
     expect(processedMessageIds.current.has('message-2')).toBe(true);
     expect(setHasMoreMessages).toHaveBeenCalledWith(false);
     expect(initialLoadCompletedRef.current).toBe(true);
@@ -82,6 +95,36 @@ describe('roomEventHandlers', () => {
     ).toBe(messages);
   });
 
+  it('applies read receipts to normalized messages by id', () => {
+    const normalizedMessages = normalizeMessages([
+      {
+        _id: 'message-1',
+        readers: [{ userId: 'user-2', readAt: 'existing' }],
+      },
+      {
+        _id: 'message-2',
+        readers: [],
+      },
+      {
+        _id: 'message-3',
+        readers: [],
+      },
+    ]);
+
+    const updated = applyReadReceiptsToNormalizedMessages(normalizedMessages, {
+      userId: 'user-2',
+      messageIds: ['message-1', 'message-2'],
+      timestamp: '2026-07-07T00:00:00.000Z',
+    });
+
+    expect(updated.ids).toBe(normalizedMessages.ids);
+    expect(updated.byId['message-1']).toBe(normalizedMessages.byId['message-1']);
+    expect(updated.byId['message-2'].readers).toEqual([
+      { userId: 'user-2', readAt: '2026-07-07T00:00:00.000Z' },
+    ]);
+    expect(updated.byId['message-3']).toBe(normalizedMessages.byId['message-3']);
+  });
+
   it('appends incoming messages only once', () => {
     const currentMessages = [{ _id: 'message-1' }];
 
@@ -105,6 +148,17 @@ describe('roomEventHandlers', () => {
     ).toEqual(['message-1', 'message-2', 'message-3']);
   });
 
+  it('appends incoming normalized messages in chronological order', () => {
+    const currentMessages = normalizeMessages([
+      { _id: 'message-1', timestamp: 1000 },
+      { _id: 'message-3', timestamp: 3000 },
+    ]);
+
+    expect(
+      appendIncomingNormalizedMessage(currentMessages, { _id: 'message-2', timestamp: 2000 }).ids
+    ).toEqual(['message-1', 'message-2', 'message-3']);
+  });
+
   it('keeps live messages when the updater is invoked twice (StrictMode)', () => {
     const mountedRef = { current: true };
     const processedMessageIds = { current: new Set() };
@@ -117,6 +171,13 @@ describe('roomEventHandlers', () => {
       expect(second).toEqual(first);
       committed = second;
     });
+    let committedNormalized = normalizeMessages([]);
+    const setNormalizedMessages = vi.fn(updater => {
+      const first = updater(committedNormalized);
+      const second = updater(committedNormalized);
+      expect(second).toEqual(first);
+      committedNormalized = second;
+    });
 
     const handlers = createRoomEventHandlers({
       mountedRef,
@@ -126,6 +187,7 @@ describe('roomEventHandlers', () => {
       processMessages: vi.fn(),
       setRoom: vi.fn(),
       setMessages,
+      setNormalizedMessages,
       setLoadingMessages: vi.fn(),
       setError: vi.fn(),
       setHasMoreMessages: vi.fn(),
@@ -138,7 +200,9 @@ describe('roomEventHandlers', () => {
 
     handlers.onMessage({ _id: 'message-live' });
 
-    expect(committed.map(message => message._id)).toEqual(['message-live']);
+    expect(setMessages).not.toHaveBeenCalled();
+    expect(committed).toEqual([]);
+    expect(committedNormalized.ids).toEqual(['message-live']);
   });
 
   it('creates room event handlers with mounted and processing guards', () => {
@@ -148,6 +212,7 @@ describe('roomEventHandlers', () => {
     const initialLoadCompletedRef = { current: false };
     const setRoom = vi.fn();
     const setMessages = vi.fn();
+    const setNormalizedMessages = vi.fn();
     const setLoadingMessages = vi.fn();
     const setError = vi.fn();
     const setHasMoreMessages = vi.fn();
@@ -166,6 +231,7 @@ describe('roomEventHandlers', () => {
       processMessages,
       setRoom,
       setMessages,
+      setNormalizedMessages,
       setLoadingMessages,
       setError,
       setHasMoreMessages,
@@ -189,7 +255,8 @@ describe('roomEventHandlers', () => {
     handlers.onError({ code: 'MESSAGE_REJECTED', message: 'blocked' });
 
     expect(setRoom).toHaveBeenCalledWith(expect.any(Function));
-    expect(setMessages).toHaveBeenCalledTimes(2);
+    expect(setMessages).not.toHaveBeenCalled();
+    expect(setNormalizedMessages).toHaveBeenCalledTimes(2);
     expect(processMessages).toHaveBeenCalledWith([{ _id: 'message-2' }], true, true);
     expect(setLoadingMessages).toHaveBeenCalledWith(false);
     expect(handleReactionUpdate).toHaveBeenCalledWith({ messageId: 'message-1' });

@@ -25,6 +25,7 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
     messageLoadError,
     hasMoreMessages,
     loadingMessages,
+    normalizedMessages,
   } = state;
 
   const {
@@ -38,7 +39,7 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
   } = refs;
 
   const {
-    setMessages,
+    setNormalizedMessages,
     setError,
     setLoadingMessages,
     cleanupManual,
@@ -144,7 +145,23 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
     handleReactionAdd,
     handleReactionRemove,
     handleReactionUpdate,
-  } = useReactionHandling({ currentUser, messages, setMessages });
+  } = useReactionHandling({
+    currentUser,
+    normalizedMessages,
+    setNormalizedMessages,
+  });
+
+  const handleVisibleMessagesRead = useCallback((messageIds) => {
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return;
+    }
+
+    if (!socketClient.canSend()) {
+      return;
+    }
+
+    socketClient.markMessagesAsRead(messageIds, activeSocket);
+  }, [activeSocket]);
 
   const {
     connectionStatus: derivedConnectionStatus,
@@ -169,6 +186,8 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
     // State
     room,
     messages,
+    messageIds: normalizedMessages.ids,
+    messagesById: normalizedMessages.byId,
     error,
     loading,
     connected,
@@ -189,6 +208,7 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
     removeFilePreview,
     handleReactionAdd,
     handleReactionRemove,
+    handleVisibleMessagesRead,
     handleLoadMore,
     cleanup,
 

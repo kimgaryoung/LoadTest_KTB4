@@ -18,7 +18,7 @@ export const useRoomHandling = ({
   handleReactionUpdate,
 }) => {
   const { onReplace, asPath } = route;
-  const { currentUser } = state;
+  const { currentUser, normalizedMessages } = state;
   const {
     socketRef,
     attachSocket,
@@ -34,6 +34,7 @@ export const useRoomHandling = ({
     setRoom,
     setError,
     setMessages,
+    setNormalizedMessages,
     setHasMoreMessages,
     setLoadingMessages,
     setupStarted,
@@ -55,14 +56,18 @@ export const useRoomHandling = ({
         hasMore,
         isInitialLoad,
         processedMessageIds,
+        normalizedMessages,
         setMessages,
+        setNormalizedMessages,
         setHasMoreMessages,
         initialLoadCompletedRef,
       });
     },
     [
       processedMessageIds,
+      normalizedMessages,
       setMessages,
+      setNormalizedMessages,
       setHasMoreMessages,
       initialLoadCompletedRef,
     ]
@@ -86,6 +91,7 @@ export const useRoomHandling = ({
         processMessages,
         setRoom,
         setMessages,
+        setNormalizedMessages,
         setLoadingMessages,
         setError,
         setHasMoreMessages,
@@ -111,6 +117,7 @@ export const useRoomHandling = ({
     initialLoadCompletedRef,
     setRoom,
     setMessages,
+    setNormalizedMessages,
     onReplace,
   ]);
 

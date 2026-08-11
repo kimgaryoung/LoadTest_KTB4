@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PdfIcon as FileText,
   ImageIcon as Image,
@@ -26,7 +26,6 @@ const FileMessage = ({
   const { user } = useAuth();
   const [error, setError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const messageDomRef = useRef(null);
   useEffect(() => {
     if (msg?.file) {
       const url = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
@@ -306,7 +305,7 @@ const FileMessage = ({
   };
 
   return (
-    <div className="my-4" ref={messageDomRef} data-testid="file-message-container">
+    <div className="my-4" data-testid="file-message-container">
       <VStack
         className={`max-w-[65%] ${isMine ? 'ml-auto items-end' : 'mr-auto items-start'}`}
         align={isMine ? 'flex-end' : 'flex-start'}
@@ -364,9 +363,6 @@ const FileMessage = ({
               messageType={msg.type}
               participants={room?.participants || []}
               readers={msg.readers || []}
-              messageId={msg._id}
-              messageRef={messageDomRef}
-              currentUserId={currentUser?._id || currentUser?.id}
             />
           </HStack>
         </div>

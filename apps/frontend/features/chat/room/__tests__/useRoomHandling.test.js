@@ -4,6 +4,10 @@ import api from '@/lib/api/client';
 import socketClient from '@/lib/socket/socketClient';
 import { Toast } from '@/components/Toast';
 import { useRoomHandling } from '../useRoomHandling';
+import {
+  createNormalizedMessages,
+  selectMessagesArray,
+} from '../../messages/normalizedMessages';
 
 const authMocks = vi.hoisted(() => ({
   user: {
@@ -71,6 +75,7 @@ const createHarness = () => {
     setRoom: vi.fn(),
     setError: vi.fn(),
     setMessages: vi.fn(),
+    setNormalizedMessages: vi.fn(),
     setHasMoreMessages: vi.fn(),
     setLoadingMessages: vi.fn(),
     setLoading: vi.fn(),
@@ -91,6 +96,7 @@ const createHarness = () => {
       email: 'tester@example.com',
     },
     messages: [],
+    normalizedMessages: createNormalizedMessages(),
   };
   const refs = {
     socketRef,
@@ -169,6 +175,7 @@ const createStableSetupHarness = () => {
       email: 'tester@example.com',
     },
     messages: [],
+    normalizedMessages: createNormalizedMessages(),
   };
 
   baseHarness.unmount();
@@ -262,7 +269,12 @@ describe('useRoomHandling', () => {
     );
     expect(socketClient.joinRoomAndWait).toHaveBeenCalledWith('room-1', harness.socketRef.current);
     expect(socketClient.fetchPreviousMessagesAndWait).not.toHaveBeenCalled();
-    expect(harness.setters.setMessages).toHaveBeenCalledWith(expect.any(Function));
+    expect(harness.setters.setMessages).not.toHaveBeenCalled();
+    expect(harness.setters.setNormalizedMessages).toHaveBeenCalledWith(expect.any(Object));
+    expect(
+      selectMessagesArray(harness.setters.setNormalizedMessages.mock.calls[0][0])
+        .map(message => message._id)
+    ).toEqual(['join-message-1']);
     expect(harness.setters.setHasMoreMessages).toHaveBeenCalledWith(false);
     expect(harness.initialLoadCompletedRef.current).toBe(true);
     expect(harness.processedMessageIds.current.has('join-message-1')).toBe(true);
@@ -340,7 +352,8 @@ describe('useRoomHandling', () => {
     });
 
     expect(harness.setters.setRoom).toHaveBeenCalledWith(expect.any(Function));
-    expect(harness.setters.setMessages).toHaveBeenCalled();
+    expect(harness.setters.setMessages).not.toHaveBeenCalled();
+    expect(harness.setters.setNormalizedMessages).toHaveBeenCalled();
     expect(harness.setters.setHasMoreMessages).toHaveBeenCalledWith(true);
     expect(Toast.error).toHaveBeenCalledWith('금칙어가 포함되어 메시지를 전송할 수 없습니다.');
   });

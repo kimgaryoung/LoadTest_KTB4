@@ -1,8 +1,14 @@
 import { useMemo, useReducer, useRef } from 'react';
+import {
+  createNormalizedMessages,
+  normalizeMessages,
+  selectMessagesArray,
+} from '../messages/normalizedMessages';
 
 export const createInitialChatRoomState = () => ({
   room: null,
   messages: [],
+  normalizedMessages: createNormalizedMessages(),
   currentUser: null,
   error: '',
   loading: true,
@@ -16,6 +22,17 @@ export const createInitialChatRoomState = () => ({
 const resolveValue = (value, currentValue) => (
   typeof value === 'function' ? value(currentValue) : value
 );
+
+const resolveMessagesState = (messages, currentNormalizedMessages) => {
+  const currentMessages = selectMessagesArray(currentNormalizedMessages);
+  const nextMessages = resolveValue(messages, currentMessages);
+  const normalizedMessages = normalizeMessages(nextMessages);
+
+  return {
+    messages: selectMessagesArray(normalizedMessages),
+    normalizedMessages,
+  };
+};
 
 export const chatRoomReducer = (state, action) => {
   switch (action.type) {
@@ -45,6 +62,7 @@ export const chatRoomReducer = (state, action) => {
         loading: false,
         loadingMessages: false,
         messages: [],
+        normalizedMessages: createNormalizedMessages(),
       };
     case 'room/changed':
       return {
@@ -54,8 +72,20 @@ export const chatRoomReducer = (state, action) => {
     case 'messages/changed':
       return {
         ...state,
-        messages: resolveValue(action.messages, state.messages),
+        ...resolveMessagesState(action.messages, state.normalizedMessages),
       };
+    case 'messages/normalizedChanged': {
+      const normalizedMessages = resolveValue(
+        action.normalizedMessages,
+        state.normalizedMessages
+      );
+
+      return {
+        ...state,
+        normalizedMessages,
+        messages: selectMessagesArray(normalizedMessages),
+      };
+    }
     case 'error/changed':
       return {
         ...state,
@@ -136,6 +166,10 @@ export const useChatRoomState = () => {
     cleanupManual: () => dispatch({ type: 'room/cleanupManual' }),
     setRoom: room => dispatch({ type: 'room/changed', room }),
     setMessages: messages => dispatch({ type: 'messages/changed', messages }),
+    setNormalizedMessages: normalizedMessages => dispatch({
+      type: 'messages/normalizedChanged',
+      normalizedMessages,
+    }),
     setError: error => dispatch({ type: 'error/changed', error }),
     setLoadingMessages: value => dispatch({
       type: 'messages/loadingChanged',
