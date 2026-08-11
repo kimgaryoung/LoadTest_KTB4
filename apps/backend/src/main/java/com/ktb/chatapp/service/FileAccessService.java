@@ -6,6 +6,7 @@ import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
+import com.ktb.chatapp.storage.StorageKey;
 import com.ktb.chatapp.storage.StoragePort;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -86,14 +87,23 @@ public class FileAccessService {
     }
 
     private FileAccess issue(File fileEntity, Delivery delivery, String fileName, String requesterId) {
+        // `path` was introduced after the original file metadata schema.  Existing files may
+        // therefore not carry it; chat attachments have a deterministic storage key, so retain
+        // read compatibility instead of passing null into a storage implementation.
+        String storageKey = fileEntity.getPath();
+        if (storageKey == null || storageKey.isBlank()) {
+            storageKey = StorageKey.chat(fileEntity.getFilename());
+            log.warn("파일 path 누락: 호환 키로 조회합니다. file={}", fileName);
+        }
+
         Optional<URI> offloadUrl = storagePort.offloadUrl(
-                fileEntity.getPath(), OFFLOAD_URL_TTL, delivery.of(fileEntity.getOriginalname()));
+                storageKey, OFFLOAD_URL_TTL, delivery.of(fileEntity.getOriginalname()));
         if (offloadUrl.isPresent()) {
             log.info("파일 오프로딩 URL 발급: {} (사용자: {})", fileName, requesterId);
             return new FileAccess.Redirect(offloadUrl.get());
         }
 
-        Resource resource = storagePort.open(fileEntity.getPath())
+        Resource resource = storagePort.open(storageKey)
                 .orElseThrow(() -> new RuntimeException("파일을 찾을 수 없습니다: " + fileName));
         log.info("파일 로드 성공: {} (사용자: {})", fileName, requesterId);
         return new FileAccess.Stream(
