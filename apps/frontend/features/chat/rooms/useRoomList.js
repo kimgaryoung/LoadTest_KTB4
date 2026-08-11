@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import axiosInstance from '@/services/axios';
 import { CONNECTION_STATUS } from './useServerConnection';
 
+const ROOM_PAGE_SIZE = 20;
+
 export const useRoomList = ({
   currentUser,
   router,
@@ -14,6 +16,9 @@ export const useRoomList = ({
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [joiningRoom, setJoiningRoom] = useState(false);
 
@@ -57,16 +62,20 @@ export const useRoomList = ({
     setConnectionStatus(CONNECTION_STATUS.ERROR);
   }, [isRetrying, setConnectionStatus]);
 
-  const loadRooms = useCallback(async () => {
+  const loadFirstPage = useCallback(async () => {
     await attemptConnection();
 
-    const response = await axiosInstance.get('/api/rooms');
+    const response = await axiosInstance.get('/api/rooms', {
+      params: { limit: ROOM_PAGE_SIZE },
+    });
 
-    if (!response?.data?.data) {
+    if (!Array.isArray(response?.data?.data)) {
       throw new Error('INVALID_RESPONSE');
     }
 
     setRooms(response.data.data);
+    setHasMore(Boolean(response.data.metadata?.hasMore));
+    setNextCursor(response.data.metadata?.nextCursor || null);
   }, [attemptConnection]);
 
   const fetchRooms = useCallback(async () => {
@@ -80,7 +89,7 @@ export const useRoomList = ({
       setLoading(true);
       setError(null);
 
-      await loadRooms();
+      await loadFirstPage();
 
       if (isInitialLoad) {
         setIsInitialLoad(false);
@@ -91,7 +100,7 @@ export const useRoomList = ({
       setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [currentUser, isInitialLoad, loadRooms, handleFetchError]);
+  }, [currentUser, isInitialLoad, loadFirstPage, handleFetchError]);
 
   /**
    * 이미 그려진 목록을 유지한 채 다시 조회한다.
@@ -106,7 +115,7 @@ export const useRoomList = ({
       isLoadingRef.current = true;
       setRefreshing(true);
 
-      await loadRooms();
+      await loadFirstPage();
       setError(null);
 
       return true;
@@ -125,7 +134,45 @@ export const useRoomList = ({
       setRefreshing(false);
       isLoadingRef.current = false;
     }
-  }, [currentUser, loadRooms]);
+  }, [currentUser, loadFirstPage]);
+
+  const loadMoreRooms = useCallback(async () => {
+    if (!currentUser?.token || !hasMore || !nextCursor || isLoadingRef.current) {
+      return false;
+    }
+
+    try {
+      isLoadingRef.current = true;
+      setLoadingMore(true);
+
+      const response = await axiosInstance.get('/api/rooms', {
+        params: { limit: ROOM_PAGE_SIZE, cursor: nextCursor },
+      });
+      if (!Array.isArray(response?.data?.data)) {
+        throw new Error('INVALID_RESPONSE');
+      }
+
+      setRooms((currentRooms) => {
+        const knownRoomIds = new Set(currentRooms.map((room) => room._id));
+        const newRooms = response.data.data.filter((room) => !knownRoomIds.has(room._id));
+        return [...currentRooms, ...newRooms];
+      });
+      setHasMore(Boolean(response.data.metadata?.hasMore));
+      setNextCursor(response.data.metadata?.nextCursor || null);
+      return true;
+    } catch (error) {
+      setError({
+        title: '채팅방 추가 로드 실패',
+        message: '다음 채팅방 목록을 불러오지 못했습니다. 다시 시도해주세요.',
+        type: 'warning',
+        showRetry: false,
+      });
+      return false;
+    } finally {
+      setLoadingMore(false);
+      isLoadingRef.current = false;
+    }
+  }, [currentUser, hasMore, nextCursor]);
 
   const handleJoinRoom = useCallback(async (roomId) => {
     if (connectionStatus !== CONNECTION_STATUS.CONNECTED) {
@@ -196,9 +243,12 @@ export const useRoomList = ({
     setError,
     loading,
     refreshing,
+    loadingMore,
+    hasMore,
     joiningRoom,
     fetchRooms,
     refreshRooms,
+    loadMoreRooms,
     handleJoinRoom,
   };
 };

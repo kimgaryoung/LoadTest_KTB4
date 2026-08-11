@@ -81,8 +81,8 @@ public class RoomController {
         }
     }
 
-    // 전체 채팅방 목록 조회
-    @Operation(summary = "채팅방 목록 조회", description = "전체 채팅방 목록을 최신순으로 조회합니다. Rate Limit이 적용됩니다.")
+    // 채팅방 목록 keyset pagination 조회
+    @Operation(summary = "채팅방 목록 조회", description = "createdAt과 roomId 기준 최신순 keyset pagination으로 조회합니다. Rate Limit이 적용됩니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "채팅방 목록 조회 성공",
             content = @Content(schema = @Schema(implementation = RoomsResponse.class))),
@@ -96,10 +96,13 @@ public class RoomController {
     })
     @GetMapping
     @RateLimit
-    public ResponseEntity<?> getAllRooms(Principal principal) {
+    public ResponseEntity<?> getAllRooms(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String cursor,
+            Principal principal) {
 
         try {
-            RoomsResponse response = roomService.getAllRooms(principal.getName());
+            RoomsResponse response = roomService.getRooms(principal.getName(), limit, cursor);
 
             // 캐시 설정
             return ResponseEntity.ok()
@@ -107,6 +110,8 @@ public class RoomController {
                 .header("Last-Modified", java.time.Instant.now().toString())
                 .body(response);
 
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("방 목록 조회 에러", e);
 
