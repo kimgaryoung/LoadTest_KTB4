@@ -74,6 +74,37 @@ describe('useMessageHandling', () => {
     expect(Toast.error).toHaveBeenCalledWith('채팅 서버와 연결이 끊어졌습니다.');
   });
 
+  it('loads history before the first message in chronological state order', () => {
+    const roomSocket = { connected: true };
+    const socketRef = { current: roomSocket };
+    const setLoadingMessages = vi.fn();
+    const messages = [
+      { _id: 'oldest', timestamp: 1000 },
+      { _id: 'latest', timestamp: 2000 },
+    ];
+    const { result } = renderHook(() =>
+      useMessageHandling(
+        currentUser,
+        roomId,
+        vi.fn(),
+        messages,
+        false,
+        setLoadingMessages,
+        socketRef
+      )
+    );
+
+    act(() => {
+      result.current.handleLoadMore();
+    });
+
+    expect(setLoadingMessages).toHaveBeenCalledWith(true);
+    expect(socketClient.fetchPreviousMessages).toHaveBeenCalledWith(
+      { roomId: 'room-1', before: 1000, limit: 30 },
+      roomSocket
+    );
+  });
+
   it('uploads files, sends file messages, and clears file preview state', async () => {
     const roomSocket = { connected: true };
     const socketRef = { current: roomSocket };

@@ -50,8 +50,9 @@ const Register = () => {
       const { name, email, password } = formData;
       await registerContext({ name, email, password });
 
-      // 지연 navigation과 /login의 추가 redirect 없이 로그인 화면으로 이동한다.
-      await router.replace('/');
+      // E2E 계약과 사용자 흐름 모두 회원가입 뒤 실제 로그인 화면인 /login으로
+      // 한 번만 이동한다. 지연 timer를 두지 않아 다음 navigation과 경쟁하지 않는다.
+      await router.replace('/login');
     } catch (err) {
       setError(err.message || '회원가입 처리 중 오류가 발생했습니다.');
       setLoading(false);
