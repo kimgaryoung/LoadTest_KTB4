@@ -2,6 +2,7 @@
 /loadtest/baseline/
 /loadtest/results/
 /loadtest/run-baseline.sh
+/e2e/artillery/results/
 
 # Local development artifacts
 .DS_Store
