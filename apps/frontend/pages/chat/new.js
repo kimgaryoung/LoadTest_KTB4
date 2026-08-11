@@ -13,10 +13,10 @@ import {
   VStack,
   Callout
 } from '@vapor-ui/core';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, withAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api/client';
 
-function NewChatRoom() {
+export function NewChatRoom() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
   const [formData, setFormData] = useState({
@@ -122,7 +122,7 @@ function NewChatRoom() {
                 size="lg"
                 placeholder="채팅방 이름을 입력하세요"
                 value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, name: value }))}
                 disabled={loading}
                 data-testid="chat-room-name-input"
               />
@@ -161,7 +161,7 @@ function NewChatRoom() {
                   size="lg"
                   placeholder="비밀번호를 입력하세요"
                   value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, password: value }))}
                   disabled={loading}
                 />
               </Box>
@@ -182,4 +182,4 @@ function NewChatRoom() {
   );
 }
 
-export default NewChatRoom;
+export default withAuth(NewChatRoom);
