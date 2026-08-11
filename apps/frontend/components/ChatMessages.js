@@ -70,14 +70,12 @@ const ChatMessages = ({
     );
   }, [currentUserId]);
 
-  const allMessages = useMemo(() => {
-    if (!Array.isArray(messages)) return [];
-
-    return [...messages].sort((a, b) => {
-      if (!a?.timestamp || !b?.timestamp) return 0;
-      return new Date(a.timestamp) - new Date(b.timestamp);
-    });
-  }, [messages]);
+  // Message state is kept in chronological order by useMessageList.
+  // Avoid copying and sorting the full history whenever the state array changes.
+  const allMessages = useMemo(
+    () => (Array.isArray(messages) ? messages : []),
+    [messages]
+  );
 
   // TanStack Virtual returns imperative helpers that React Compiler cannot memoize safely.
   // eslint-disable-next-line react-hooks/incompatible-library
