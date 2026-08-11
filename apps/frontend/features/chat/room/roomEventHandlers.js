@@ -1,4 +1,7 @@
-import { deriveUniqueSortedMessages } from '../messages/useMessageList';
+import {
+  deriveUniqueSortedMessages,
+  insertUniqueChronologicalMessage,
+} from '../messages/useMessageList';
 
 export const processLoadedRoomMessages = ({
   loadedMessages,
@@ -14,11 +17,13 @@ export const processLoadedRoomMessages = ({
   }
 
   const processedSnapshot = new Set(processedMessageIds.current);
-  processedMessageIds.current = deriveUniqueSortedMessages(
-    [],
-    loadedMessages,
-    processedSnapshot
-  ).processedMessageIds;
+  const nextProcessedMessageIds = new Set(processedSnapshot);
+  loadedMessages.forEach(message => {
+    if (message?._id) {
+      nextProcessedMessageIds.add(message._id);
+    }
+  });
+  processedMessageIds.current = nextProcessedMessageIds;
 
   let nextMessages;
   setMessages(prev => {
@@ -34,9 +39,11 @@ export const processLoadedRoomMessages = ({
   return nextMessages;
 };
 
-export const applyReadReceipts = (messages, { userId, messageIds, timestamp }) =>
-  messages.map(msg => {
-    if (!messageIds.includes(msg._id)) {
+export const applyReadReceipts = (messages, { userId, messageIds, timestamp }) => {
+  const messageIdSet = new Set(messageIds);
+  let changed = false;
+  const nextMessages = messages.map(msg => {
+    if (!messageIdSet.has(msg._id)) {
       return msg;
     }
 
@@ -47,22 +54,18 @@ export const applyReadReceipts = (messages, { userId, messageIds, timestamp }) =
       return msg;
     }
 
+    changed = true;
     return {
       ...msg,
       readers: [...(msg.readers || []), { userId, readAt: timestamp || new Date() }],
     };
   });
 
+  return changed ? nextMessages : messages;
+};
+
 export const appendIncomingMessage = (messages, incoming) => {
-  if (!incoming?._id) {
-    return messages;
-  }
-
-  if (messages.some(msg => msg._id === incoming._id)) {
-    return messages;
-  }
-
-  return [...messages, incoming];
+  return insertUniqueChronologicalMessage(messages, incoming);
 };
 
 export const createRoomEventHandlers = ({

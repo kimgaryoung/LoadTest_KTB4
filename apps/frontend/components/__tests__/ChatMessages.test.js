@@ -28,7 +28,7 @@ vi.mock('../UserMessage', () => ({
 }));
 
 describe('ChatMessages', () => {
-  it('renders messages sorted by timestamp without mutating the input array', () => {
+  it('renders messages in state order without sorting or mutating the input array', () => {
     const messages = [
       {
         _id: 'late',
@@ -54,8 +54,8 @@ describe('ChatMessages', () => {
     );
 
     expect(screen.getAllByTestId('message').map((node) => node.textContent)).toEqual([
-      'early message',
       'late message',
+      'early message',
     ]);
     expect(messages.map((message) => message._id)).toEqual(originalOrder);
   });
