@@ -69,7 +69,7 @@ public class MessageLoader {
         
         var messageIds = sortedMessages.stream().map(Message::getId).toList();
         messageReadStatusService.updateReadStatus(messageIds, userId);
-        
+
         Map<String, User> usersById = userRepository.findAllById(
                         sortedMessages.stream().map(Message::getSenderId)
                                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet()))

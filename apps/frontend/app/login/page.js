@@ -1,10 +1,27 @@
 import { redirect } from 'next/navigation';
 
-/**
- * Keep the legacy /login URL, but redirect before a client page is hydrated.
- * A useEffect redirect cancels an in-flight document navigation, which makes
- * direct clients (including Chromium E2E) intermittently receive ERR_ABORTED.
- */
-export default function LoginRedirectPage() {
-  redirect('/');
-}
+const buildLoginTarget = (searchParams = {}) => {
+  const query = new URLSearchParams();
+
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => query.append(key, item));
+      return;
+    }
+
+    if (value != null) {
+      query.set(key, value);
+    }
+  });
+
+  const queryString = query.toString();
+  return queryString ? `/?${queryString}` : '/';
+};
+
+const LoginRedirectPage = async ({ searchParams } = {}) => {
+  redirect(buildLoginTarget(await searchParams));
+};
+
+export { buildLoginTarget };
+
+export default LoginRedirectPage;

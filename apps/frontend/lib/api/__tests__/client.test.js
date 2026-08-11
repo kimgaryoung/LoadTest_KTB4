@@ -136,4 +136,32 @@ describe('api client', () => {
       },
     });
   });
+
+  it('does not retry a retryable request when retry is disabled', async () => {
+    const client = createApiClient({
+      baseURL: 'http://api.test',
+      getSession: () => null,
+    });
+    let attempts = 0;
+
+    client.defaults.adapter = async (config) => {
+      attempts += 1;
+      const error = new Error('timeout');
+      error.code = 'ECONNABORTED';
+      error.config = config;
+      error.request = {};
+      throw error;
+    };
+
+    await expect(
+      client.post('/api/auth/login', {}, {
+        skipAuth: true,
+        handleAuthError: false,
+        retry: false,
+      })
+    ).rejects.toMatchObject({
+      isNetworkError: true,
+    });
+    expect(attempts).toBe(1);
+  });
 });
