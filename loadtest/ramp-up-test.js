@@ -330,15 +330,14 @@ class RampUpLoadTester {
             'Authorization': `Bearer ${this.adminAuth.token}`
           },
           params: {
-            page: 0,
-            pageSize: 10
+            limit: 20
           },
           timeout: 5000
         }
       );
 
-      const totalRooms = response.data.metadata?.total || 0;
-      this.log('info', `Fetched rooms list: ${totalRooms} total rooms in system`);
+      const currentCount = response.data.metadata?.currentCount || response.data.data?.length || 0;
+      this.log('info', `Fetched rooms list page: ${currentCount} rooms`);
       return response.data;
 
     } catch (error) {

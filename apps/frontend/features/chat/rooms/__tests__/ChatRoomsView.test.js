@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   fetchRooms: vi.fn(() => Promise.resolve()),
   refreshRooms: vi.fn(() => Promise.resolve(true)),
   attemptConnection: vi.fn(() => Promise.resolve(true)),
+  rooms: [],
+  hasMore: false,
+  loadMoreRooms: vi.fn(() => Promise.resolve(true)),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -41,14 +44,17 @@ vi.mock('../useServerConnection', async () => {
 
 vi.mock('../useRoomList', () => ({
   useRoomList: () => ({
-    rooms: [],
+    rooms: mocks.rooms,
     setRooms: vi.fn(),
     error: mocks.error,
     loading: false,
     refreshing: false,
+    loadingMore: false,
+    hasMore: mocks.hasMore,
     joiningRoom: false,
     fetchRooms: mocks.fetchRooms,
     refreshRooms: mocks.refreshRooms,
+    loadMoreRooms: mocks.loadMoreRooms,
     handleJoinRoom: vi.fn(),
   }),
 }));
@@ -61,9 +67,12 @@ describe('ChatRoomsView', () => {
   beforeEach(() => {
     mocks.connectionStatus = CONNECTION_STATUS.CHECKING;
     mocks.error = null;
+    mocks.rooms = [];
+    mocks.hasMore = false;
     mocks.fetchRooms.mockClear();
     mocks.refreshRooms.mockClear();
     mocks.attemptConnection.mockClear();
+    mocks.loadMoreRooms.mockClear();
   });
 
   afterEach(() => {
@@ -143,5 +152,22 @@ describe('ChatRoomsView', () => {
     });
 
     expect(screen.queryByTestId('refresh-rooms-button')).toBeNull();
+  });
+
+  it('shows a load-more action for a partial room page', async () => {
+    mocks.connectionStatus = CONNECTION_STATUS.CONNECTED;
+    mocks.rooms = [{
+      _id: 'room-1',
+      name: 'Room 1',
+      participants: [],
+      createdAt: '2026-08-11T00:00:00Z',
+    }];
+    mocks.hasMore = true;
+
+    render(<ChatRoomsView router={{ push: vi.fn() }} />);
+
+    fireEvent.click(await screen.findByTestId('load-more-rooms-button'));
+
+    expect(mocks.loadMoreRooms).toHaveBeenCalledTimes(1);
   });
 });
