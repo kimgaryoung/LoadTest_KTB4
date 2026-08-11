@@ -3,7 +3,6 @@ package com.ktb.chatapp.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ktb.chatapp.config.MongoTestContainer;
-import com.ktb.chatapp.config.RedisTestContainer;
 import com.ktb.chatapp.model.Room;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -24,7 +23,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
-@Import({MongoTestContainer.class, RedisTestContainer.class})
+@Import(MongoTestContainer.class)
 @TestPropertySource(properties = {
         "spring.data.mongodb.auto-index-creation=true",
         "socketio.enabled=false"

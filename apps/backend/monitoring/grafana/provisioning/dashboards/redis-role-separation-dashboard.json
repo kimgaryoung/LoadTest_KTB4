@@ -1,0 +1,115 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [
+        {"expr": "redis_memory_used_bytes", "legendFormat": "{{role}} used"},
+        {"expr": "redis_memory_max_bytes", "legendFormat": "{{role}} maxmemory"}
+      ],
+      "title": "Redis memory used and maxmemory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "cores"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "sum by (role) (rate(redis_cpu_user_seconds_total[1m]) + rate(redis_cpu_sys_seconds_total[1m]))", "legendFormat": "{{role}}"}],
+      "title": "Redis CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [{"expr": "sum by (role) (rate(redis_commands_processed_total[1m]))", "legendFormat": "{{role}}"}],
+      "title": "Commands per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "redis_connected_clients", "legendFormat": "{{role}} connected"},
+        {"expr": "rate(redis_rejected_connections_total[1m])", "legendFormat": "{{role}} rejected/s"}
+      ],
+      "title": "Connections",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 5,
+      "targets": [
+        {"expr": "sum by (role) (rate(redis_evicted_keys_total[1m]))", "legendFormat": "{{role}} evicted/s"},
+        {"expr": "sum by (role) (rate(redis_expired_keys_total[1m]))", "legendFormat": "{{role}} expired/s"}
+      ],
+      "title": "Evicted and expired keys",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 6,
+      "targets": [
+        {"expr": "redis_pubsub_channels", "legendFormat": "{{role}} channels"},
+        {"expr": "redis_pubsub_patterns", "legendFormat": "{{role}} patterns"}
+      ],
+      "title": "Pub/Sub channels and patterns",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 7,
+      "targets": [{"expr": "sum by (result) (rate(user_profile_cache_requests_total[1m]))", "legendFormat": "profile cache {{result}}/s"}],
+      "title": "Profile cache results",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 8,
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le, operation) (rate(session_store_operation_duration_seconds_bucket{store=\"redis\"}[5m])))", "legendFormat": "{{operation}} p95"},
+        {"expr": "histogram_quantile(0.99, sum by (le, operation) (rate(session_store_operation_duration_seconds_bucket{store=\"redis\"}[5m])))", "legendFormat": "{{operation}} p99"}
+      ],
+      "title": "Redis session operation latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+      "id": 9,
+      "targets": [{"expr": "sum by (result) (rate(session_store_validations_total{store=\"redis\"}[1m]))", "legendFormat": "{{result}}/s"}],
+      "title": "Redis session validation results",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["redis", "role-separation", "performance"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Redis Role Separation",
+  "uid": "redis-role-separation",
+  "version": 1
+}

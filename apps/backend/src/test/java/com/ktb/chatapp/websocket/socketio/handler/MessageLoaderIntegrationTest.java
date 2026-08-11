@@ -1,7 +1,6 @@
 package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.ktb.chatapp.config.MongoTestContainer;
-import com.ktb.chatapp.config.RedisTestContainer;
 import com.ktb.chatapp.dto.FetchMessagesRequest;
 import com.ktb.chatapp.dto.FetchMessagesResponse;
 import com.ktb.chatapp.dto.MessageResponse;
@@ -34,7 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 
 @SpringBootTest
-@Import({MongoTestContainer.class, RedisTestContainer.class})
+@Import(MongoTestContainer.class)
 @TestPropertySource(properties = {
         "spring.data.mongodb.auto-index-creation=true",
         "socketio.enabled=false"

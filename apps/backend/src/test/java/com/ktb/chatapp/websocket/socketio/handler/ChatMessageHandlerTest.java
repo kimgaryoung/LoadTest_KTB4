@@ -158,5 +158,8 @@ class ChatMessageHandlerTest {
         verify(client, never()).sendEvent(eq(MESSAGE), any(MessageResponse.class));
         org.junit.jupiter.api.Assertions.assertEquals("message-1", payloadCaptor.getValue().getId());
         org.junit.jupiter.api.Assertions.assertEquals("hello", payloadCaptor.getValue().getContent());
+        org.junit.jupiter.api.Assertions.assertEquals(1, payloadCaptor.getValue().getReaders().size());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "user-1", payloadCaptor.getValue().getReaders().getFirst().getUserId());
     }
 }

@@ -7,6 +7,8 @@ import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.cache.CachedUserProfile;
+import com.ktb.chatapp.service.cache.UserProfileCache;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -30,6 +32,7 @@ public class RoomService {
     private final RoomCursorCodec roomCursorCodec;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserProfileCache userProfileCache;
 
     public RoomsResponse getRooms(String name, int limit, String cursor) {
         if (limit < 1 || limit > 100) {
@@ -47,7 +50,7 @@ public class RoomService {
                 ? fetchedRooms.subList(0, limit)
                 : fetchedRooms;
 
-        Map<String, User> usersById = findUsersByIds(rooms.stream()
+        Map<String, CachedUserProfile> usersById = findUsersByIds(rooms.stream()
             .flatMap(room -> java.util.stream.Stream.concat(
                 java.util.stream.Stream.ofNullable(room.getCreator()),
                 room.getParticipantIds() == null
@@ -187,7 +190,7 @@ public class RoomService {
         
         // Publish event for room updated
         try {
-            Map<String, User> usersById = findUsersByIds(java.util.stream.Stream.concat(
+            Map<String, CachedUserProfile> usersById = findUsersByIds(java.util.stream.Stream.concat(
                     java.util.stream.Stream.ofNullable(room.getCreator()),
                     room.getParticipantIds() == null
                         ? java.util.stream.Stream.empty()
@@ -203,12 +206,13 @@ public class RoomService {
         return room;
     }
 
-    private RoomResponse mapToRoomResponse(Room room, String name, Map<String, User> usersById) {
+    private RoomResponse mapToRoomResponse(
+            Room room, String name, Map<String, CachedUserProfile> usersById) {
         if (room == null) return null;
 
-        User creator = room.getCreator() == null ? null : usersById.get(room.getCreator());
+        CachedUserProfile creator = room.getCreator() == null ? null : usersById.get(room.getCreator());
 
-        List<User> participants = room.getParticipantIds() == null ? List.of() : room.getParticipantIds().stream()
+        List<CachedUserProfile> participants = room.getParticipantIds() == null ? List.of() : room.getParticipantIds().stream()
             .map(usersById::get)
             .filter(java.util.Objects::nonNull)
             .toList();
@@ -218,33 +222,42 @@ public class RoomService {
             .name(room.getName() != null ? room.getName() : "제목 없음")
             .hasPassword(room.isHasPassword())
             .creator(creator != null ? UserResponse.builder()
-                .id(creator.getId())
-                .name(creator.getName() != null ? creator.getName() : "알 수 없음")
-                .email(creator.getEmail() != null ? creator.getEmail() : "")
+                .id(creator.id())
+                .name(creator.name() != null ? creator.name() : "알 수 없음")
+                .email(creator.email() != null ? creator.email() : "")
                 .build() : null)
             .participants(participants.stream()
-                .filter(p -> p != null && p.getId() != null)
+                .filter(p -> p != null && p.id() != null)
                 .map(p -> UserResponse.builder()
-                    .id(p.getId())
-                    .name(p.getName() != null ? p.getName() : "알 수 없음")
-                    .email(p.getEmail() != null ? p.getEmail() : "")
+                    .id(p.id())
+                    .name(p.name() != null ? p.name() : "알 수 없음")
+                    .email(p.email() != null ? p.email() : "")
                     .build())
                 .collect(Collectors.toList()))
             .createdAtDateTime(room.getCreatedAt())
-            .isCreator(creator != null && creator.getId().equals(name))
+            .isCreator(creator != null && creator.id().equals(name))
             .build();
     }
 
-    private Map<String, User> findUsersByIds(java.util.Set<String> userIds) {
+    private Map<String, CachedUserProfile> findUsersByIds(java.util.Set<String> userIds) {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        Map<String, User> usersById = new LinkedHashMap<>();
-        userRepository.findAllById(userIds).forEach(user -> {
+        Map<String, CachedUserProfile> usersById = new LinkedHashMap<>(userProfileCache.getAll(userIds));
+        java.util.Set<String> missingUserIds = userIds.stream()
+                .filter(userId -> !usersById.containsKey(userId))
+                .collect(Collectors.toSet());
+        if (missingUserIds.isEmpty()) {
+            return usersById;
+        }
+        List<User> loadedUsers = new java.util.ArrayList<>();
+        userRepository.findAllById(missingUserIds).forEach(user -> {
             if (user != null && user.getId() != null) {
-                usersById.put(user.getId(), user);
+                loadedUsers.add(user);
+                usersById.put(user.getId(), CachedUserProfile.from(user));
             }
         });
+        userProfileCache.putAll(loadedUsers);
         return usersById;
     }
 }

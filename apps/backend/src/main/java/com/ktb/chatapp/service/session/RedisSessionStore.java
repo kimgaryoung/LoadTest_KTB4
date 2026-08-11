@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -50,7 +51,7 @@ public class RedisSessionStore implements SessionStore {
     private final SessionStoreMetrics metrics;
 
     public RedisSessionStore(
-            StringRedisTemplate redisTemplate,
+            @Qualifier("authRedisTemplate") StringRedisTemplate redisTemplate,
             ObjectMapper objectMapper,
             SessionStoreMetrics metrics) {
         this.redisTemplate = redisTemplate;

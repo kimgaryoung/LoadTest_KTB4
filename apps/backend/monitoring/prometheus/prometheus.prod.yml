@@ -25,11 +25,19 @@ scrape_configs:
         labels:
           environment: 'production'
 
-  - job_name: 'redis'
+  - job_name: 'redis-auth'
     static_configs:
-      - targets: ['IP:9121'] # your-redis-server
+      - targets: ['AUTH_REDIS_IP:9121']
         labels:
           environment: 'production'
+          role: 'auth'
+
+  - job_name: 'redis-realtime'
+    static_configs:
+      - targets: ['REALTIME_REDIS_IP:9121']
+        labels:
+          environment: 'production'
+          role: 'realtime'
 
   - job_name: 'node-exporter'
     file_sd_configs:

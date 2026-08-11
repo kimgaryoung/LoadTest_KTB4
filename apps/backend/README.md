@@ -89,9 +89,16 @@ make verify-java
 | `ENCRYPTION_SALT` | ✅ | 없음 | 암복호화에 사용하는 솔트 값             |
 | `JWT_SECRET` | ✅ | 없음 | HMAC-SHA256 JWT 서명 비밀키      |
 | `MONGO_URI` | ✅ | 없음 | MongoDB 연결 문자열              |
-| `REDIS_HOST` | ✅ | 없음 | Redis 호스트                    |
-| `REDIS_PORT` | ✅ | 없음 | Redis 포트                      |
+| `AUTH_REDIS_HOST` | ✅ | `REDIS_HOST` 또는 `localhost` | 세션·레이트리밋 Redis 호스트 |
+| `AUTH_REDIS_PORT` | ❌ | `REDIS_PORT` 또는 `6379` | 세션·레이트리밋 Redis 포트 |
+| `AUTH_REDIS_PASSWORD` | ❌ | `REDIS_PASSWORD` 또는 빈 값 | 세션·레이트리밋 Redis 비밀번호 |
+| `REALTIME_REDIS_HOST` | ✅ | `REDIS_HOST` 또는 `localhost` | 프로필 캐시·Socket.IO Redis 호스트 |
+| `REALTIME_REDIS_PORT` | ❌ | `REDIS_PORT` 또는 `6379` | 프로필 캐시·Socket.IO Redis 포트 |
+| `REALTIME_REDIS_PASSWORD` | ❌ | `REDIS_PASSWORD` 또는 빈 값 | 프로필 캐시·Socket.IO Redis 비밀번호 |
 | `SESSION_STORE` | ❌ | `redis` | 로그인 세션 저장소. 긴급 롤백 시 `mongo` |
+| `RATE_LIMIT_STORE` | ❌ | `redis` | Socket.IO 레이트리밋 저장소 |
+| `SOCKETIO_STORE` | ❌ | `redis` | `redis`는 멀티 노드 공유 store, `memory`는 단일 노드 전용 |
+| `USER_PROFILE_CACHE_ENABLED` | ❌ | `true` | 공개 프로필 Redis 캐시 활성화 |
 | `PORT` | ❌ | `5001` | HTTP API 포트 (`server.port`) |
 | `WS_PORT` | ❌ | `5002` | Socket.IO 서버 포트             |
 | `CORS_ALLOWED_ORIGINS` | ❌ | `*` | REST API CORS 허용 Origin 목록. 쉼표로 구분 |
@@ -192,7 +199,7 @@ Spring Boot DevTools가 활성화되어 있어 다음 변경사항을 자동으�
 ```bash
 docker compose up -d
 ```
-MongoDB와 Redis가 이미 실행 중이라면 이 단계를 건너뛸 수 있습니다.
+MongoDB와 역할별 Redis A/B가 이미 실행 중이라면 이 단계를 건너뛸 수 있습니다.
 
 ## 모니터링 UI 접속
 `docker compose up -d`(또는 `make dev`)로 종속 서비스를 구동하면 모니터링 스택도 함께 올라옵니다. 아래 UI에서 접속할 수 있습니다(dev 기준):
@@ -206,9 +213,10 @@ Prometheus가 수집하는 메트릭 원본 엔드포인트:
 
 - **애플리케이션**: [http://localhost:5001/actuator/prometheus](http://localhost:5001/actuator/prometheus)
 - **mongodb-exporter**: [http://localhost:9216/metrics](http://localhost:9216/metrics)
-- **redis-exporter**: [http://localhost:9121/metrics](http://localhost:9121/metrics)
+- **Redis A(auth) exporter**: [http://localhost:9121/metrics](http://localhost:9121/metrics)
+- **Redis B(realtime) exporter**: [http://localhost:9122/metrics](http://localhost:9122/metrics)
 
 ## 트러블슈팅
 - `.env`의 필수 키가 누락되면 애플리케이션이 부팅 중 예외를 발생시킵니다.
-- MongoDB/Redis 연결 오류 시 `docker compose ps`로 컨테이너 상태를 확인하거나 `application.properties`의 기본값을 검토하세요.
+- MongoDB/Redis 연결 오류 시 `docker compose ps`로 컨테이너 상태를 확인하고 `AUTH_REDIS_*`와 `REALTIME_REDIS_*`를 각각 검토하세요.
 - OpenAI 통합을 사용하지 않을 경우 `OPENAI_API_KEY`를 제거하면 관련 기능은 비활성화됩니다.

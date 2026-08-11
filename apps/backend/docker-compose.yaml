@@ -19,6 +19,15 @@ services:
     volumes:
       - redis_data:/data
 
+  redis-realtime:
+    image: redis:8.8.0
+    container_name: redis-realtime-ktb
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_realtime_data:/data
+
   mongodb-exporter:
     image: percona/mongodb_exporter:0.51.0
     container_name: mongodb-exporter-ktb
@@ -41,6 +50,17 @@ services:
       - REDIS_ADDR=redis:6379
     depends_on:
       - redis
+
+  redis-realtime-exporter:
+    image: oliver006/redis_exporter:v1.86.0
+    container_name: redis-realtime-exporter-ktb
+    restart: unless-stopped
+    ports:
+      - "9122:9121"
+    environment:
+      - REDIS_ADDR=redis-realtime:6379
+    depends_on:
+      - redis-realtime
 
   prometheus:
     image: prom/prometheus:v3.13.0
@@ -80,5 +100,6 @@ services:
 volumes:
   mongo_data:
   redis_data:
+  redis_realtime_data:
   prometheus_data:
   grafana_data:

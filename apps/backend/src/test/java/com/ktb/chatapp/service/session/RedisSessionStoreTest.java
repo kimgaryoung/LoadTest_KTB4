@@ -1,7 +1,7 @@
 package com.ktb.chatapp.service.session;
 
 import com.ktb.chatapp.config.MongoTestContainer;
-import com.ktb.chatapp.config.RedisTestContainer;
+import com.ktb.chatapp.config.RedisRoleTestContainers;
 import com.ktb.chatapp.model.Session;
 import com.ktb.chatapp.service.SessionMetadata;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -17,13 +17,13 @@ import org.springframework.test.context.TestPropertySource;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-@Import({MongoTestContainer.class, RedisTestContainer.class})
+@Import(MongoTestContainer.class)
 @TestPropertySource(properties = {
     "socketio.enabled=false",
     "session.store=redis"
 })
 @DisplayName("Redis 로그인 세션 저장소 통합 테스트")
-class RedisSessionStoreTest {
+class RedisSessionStoreTest extends RedisRoleTestContainers {
 
     private static final String USER_ID = "redis-session-user";
     private static final long TTL_SECONDS = 1_800L;

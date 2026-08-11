@@ -171,6 +171,7 @@ public class ChatMessageHandler {
                 return;
             }
 
+            markSenderAsRead(message, socketUser.id());
             Message savedMessage = messageRepository.save(message);
             MessageResponse messageResponse = createMessageResponse(savedMessage, sender);
 
@@ -260,6 +261,7 @@ public class ChatMessageHandler {
         messageResponse.setType(message.getType());
         messageResponse.setTimestamp(message.toTimestampMillis());
         messageResponse.setReactions(message.getReactions() != null ? message.getReactions() : Collections.emptyMap());
+        messageResponse.setReaders(message.getReaders() != null ? message.getReaders() : Collections.emptyList());
         messageResponse.setSender(UserResponse.from(sender));
         messageResponse.setMetadata(message.getMetadata());
 
@@ -269,6 +271,22 @@ public class ChatMessageHandler {
         }
 
         return messageResponse;
+    }
+
+    private void markSenderAsRead(Message message, String senderId) {
+        List<Message.MessageReader> readers = message.getReaders();
+        if (readers == null) {
+            readers = new ArrayList<>();
+            message.setReaders(readers);
+        }
+        boolean alreadyMarked = readers.stream()
+                .anyMatch(reader -> senderId.equals(reader.getUserId()));
+        if (!alreadyMarked) {
+            readers.add(Message.MessageReader.builder()
+                    .userId(senderId)
+                    .readAt(LocalDateTime.now())
+                    .build());
+        }
     }
 
     // Metrics helper methods

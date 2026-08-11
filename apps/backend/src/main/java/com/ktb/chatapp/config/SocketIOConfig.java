@@ -74,10 +74,11 @@ public class SocketIOConfig {
             config.setStoreFactory(new RedissonStoreFactory(redissonClient));
             log.info("Socket.IO shared Redisson store enabled");
         } else {
-            config.setStoreFactory(new MemoryStoreFactory());
             if ("redis".equalsIgnoreCase(storeType)) {
-                log.warn("socketio.store=redis but no RedissonClient is available; using memory store");
+                throw new IllegalStateException(
+                        "socketio.store=redis requires the realtime Redis Redisson client");
             }
+            config.setStoreFactory(new MemoryStoreFactory());
         }
 
         log.info("Socket.IO server configured on {}:{} with {} boss threads and {} worker threads",
