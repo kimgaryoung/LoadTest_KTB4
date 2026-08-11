@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveUniqueSortedMessages,
+  insertUniqueChronologicalMessage,
   mergeUniqueSortedMessages,
 } from '../useMessageList';
 
@@ -74,5 +75,65 @@ describe('mergeUniqueSortedMessages', () => {
     expect(second.messages).toEqual(first.messages);
     expect(second.processedMessageIds).toEqual(first.processedMessageIds);
     expect(processedIds).toEqual(new Set(['existing']));
+  });
+
+  it('returns the existing array when an incoming batch adds no messages', () => {
+    const currentMessages = [
+      { _id: 'existing', timestamp: '2026-01-01T00:00:01Z' },
+    ];
+
+    const result = deriveUniqueSortedMessages(
+      currentMessages,
+      [{ _id: 'existing', timestamp: '2026-01-01T00:00:01Z' }],
+      new Set(['existing'])
+    );
+
+    expect(result.messages).toBe(currentMessages);
+  });
+
+  it('merges an older page into the chronological state order', () => {
+    const result = mergeUniqueSortedMessages(
+      [
+        { _id: 'current-1', timestamp: 3000 },
+        { _id: 'current-2', timestamp: 4000 },
+      ],
+      [
+        { _id: 'older-1', timestamp: 1000 },
+        { _id: 'older-2', timestamp: 2000 },
+      ],
+      new Set(['current-1', 'current-2'])
+    );
+
+    expect(result.map(message => message._id)).toEqual([
+      'older-1',
+      'older-2',
+      'current-1',
+      'current-2',
+    ]);
+  });
+
+  it('inserts a delayed live message without reordering equal timestamps', () => {
+    const currentMessages = [
+      { _id: 'first', timestamp: 1000 },
+      { _id: 'same-time', timestamp: 3000 },
+      { _id: 'last', timestamp: 5000 },
+    ];
+
+    const withDelayedMessage = insertUniqueChronologicalMessage(
+      currentMessages,
+      { _id: 'delayed', timestamp: 2000 }
+    );
+    const withEqualTimestamp = insertUniqueChronologicalMessage(
+      withDelayedMessage,
+      { _id: 'same-time-later', timestamp: 3000 }
+    );
+
+    expect(withEqualTimestamp.map(message => message._id)).toEqual([
+      'first',
+      'delayed',
+      'same-time',
+      'same-time-later',
+      'last',
+    ]);
   });
 });

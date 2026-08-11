@@ -65,6 +65,23 @@ describe('roomEventHandlers', () => {
     ]);
   });
 
+  it('keeps the existing array when a read receipt changes nothing', () => {
+    const messages = [
+      {
+        _id: 'message-1',
+        readers: [{ userId: 'user-2', readAt: 'existing' }],
+      },
+    ];
+
+    expect(
+      applyReadReceipts(messages, {
+        userId: 'user-2',
+        messageIds: ['message-1'],
+        timestamp: '2026-07-07T00:00:00.000Z',
+      })
+    ).toBe(messages);
+  });
+
   it('appends incoming messages only once', () => {
     const currentMessages = [{ _id: 'message-1' }];
 
@@ -74,6 +91,18 @@ describe('roomEventHandlers', () => {
     expect(
       appendIncomingMessage(currentMessages, { _id: 'message-2' })
     ).toEqual([{ _id: 'message-1' }, { _id: 'message-2' }]);
+  });
+
+  it('keeps delayed incoming messages in chronological order', () => {
+    const currentMessages = [
+      { _id: 'message-1', timestamp: 1000 },
+      { _id: 'message-3', timestamp: 3000 },
+    ];
+
+    expect(
+      appendIncomingMessage(currentMessages, { _id: 'message-2', timestamp: 2000 })
+        .map(message => message._id)
+    ).toEqual(['message-1', 'message-2', 'message-3']);
   });
 
   it('keeps live messages when the updater is invoked twice (StrictMode)', () => {

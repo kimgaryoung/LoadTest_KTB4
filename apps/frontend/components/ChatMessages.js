@@ -39,6 +39,8 @@ const ChatMessages = ({
   onReactionRemove = () => {},
   onLoadMore = () => {}
 }) => {
+  const currentUserId = currentUser?.id;
+
   // 무한 스크롤 훅
   const { sentinelRef } = useInfiniteScroll(
     onLoadMore,
@@ -57,16 +59,16 @@ const ChatMessages = ({
   const setContainerRef = useCallback((node) => {
     containerRef.current = node;
     setScrollElement(node);
-  }, [containerRef]);
+  }, []);
   const isMine = useCallback((msg) => {
-    if (!msg?.sender || !currentUser?.id) return false;
+    if (!msg?.sender || !currentUserId) return false;
     
     return (
-      msg.sender._id === currentUser.id || 
-      msg.sender.id === currentUser.id ||
-      msg.sender === currentUser.id
+      msg.sender._id === currentUserId || 
+      msg.sender.id === currentUserId ||
+      msg.sender === currentUserId
     );
-  }, [currentUser?.id]);
+  }, [currentUserId]);
 
   const allMessages = useMemo(() => {
     if (!Array.isArray(messages)) return [];
@@ -252,7 +254,7 @@ const ChatMessages = ({
     const senderId = latestMessage?.sender?._id
       || latestMessage?.sender?.id
       || latestMessage?.sender;
-    const isMyMessage = senderId === currentUser?.id;
+    const isMyMessage = senderId === currentUserId;
     previousLatestMessageKeyRef.current = latestMessageKey;
 
     if (!isMyMessage && !isNearBottomRef.current) {
@@ -269,7 +271,7 @@ const ChatMessages = ({
     return () => cancelAnimationFrame(frameId);
   }, [
     allMessages.length,
-    currentUser?.id,
+    currentUserId,
     latestMessage,
     latestMessageKey,
     loadingMessages,
