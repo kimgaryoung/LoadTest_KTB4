@@ -42,6 +42,16 @@ pnpm run test:rampup  # 500명, ~100개 방까지 점진적 증가, 60초 유지
 - ✅ 최근 활동 로그 표시 (최근 10개 항목)
 - ✅ 커맨드라인 인터페이스로 유연한 설정
 
+### 참가자 목록 전파 성능 비교
+
+기존 전체 목록 전파와 delta 전파의 JSON 전송량 및 직렬화 비용을 같은 참가자 수로 비교합니다.
+
+```bash
+pnpm run benchmark:participant-delta -- --sizes=10,50,100,500,1000
+```
+
+`wireReduction`은 참가자 목록 payload 크기에 실제 수신자 수를 곱한 추정 전송량입니다. 실제 서버 부하 비교는 동일한 설정으로 `test:light`, `test:medium` 또는 `test:rampup`을 개선 전후 각각 실행해 Socket.IO 송신량과 입장 지연을 비교해야 합니다.
+
 ## 시스템 요구사항
 
 - Node.js 18+

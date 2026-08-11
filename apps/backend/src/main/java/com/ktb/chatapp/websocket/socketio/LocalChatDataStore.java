@@ -2,6 +2,8 @@ package com.ktb.chatapp.websocket.socketio;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * Local in-memory implementation of ChatDataStore using ConcurrentHashMap.
@@ -33,6 +35,15 @@ public class LocalChatDataStore implements ChatDataStore {
     @Override
     public void delete(String key) {
         storage.remove(key);
+    }
+
+    @Override
+    public <T> T update(String key, Class<T> type, Supplier<T> initialValue, UnaryOperator<T> updater) {
+        Object updated = storage.compute(key, (ignored, value) -> {
+            T current = value == null ? initialValue.get() : type.cast(value);
+            return updater.apply(current);
+        });
+        return updated == null ? null : type.cast(updated);
     }
     
     @Override

@@ -6,10 +6,12 @@ import com.corundumstudio.socketio.annotation.OnEvent;
 import com.ktb.chatapp.dto.FetchMessagesRequest;
 import com.ktb.chatapp.dto.FetchMessagesResponse;
 import com.ktb.chatapp.dto.JoinRoomSuccessResponse;
+import com.ktb.chatapp.dto.ParticipantDeltaResponse;
 import com.ktb.chatapp.dto.UserResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.MessageType;
 import com.ktb.chatapp.model.Room;
+import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
@@ -20,6 +22,7 @@ import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
@@ -34,6 +37,8 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 @RequiredArgsConstructor
 public class RoomJoinHandler {
 
+    static final String ROOM_RESTORE_IN_PROGRESS = "roomRestoreInProgress";
+
     private final SocketIOServer socketIOServer;
     private final MessageRepository messageRepository;
     private final RoomRepository roomRepository;
@@ -42,6 +47,9 @@ public class RoomJoinHandler {
     private final MessageLoader messageLoader;
     private final MessageResponseMapper messageResponseMapper;
     private final RoomLeaveHandler roomLeaveHandler;
+
+    @Value("${socketio.participant-delta.enabled:false}")
+    private boolean participantDeltaEnabled;
     
     @OnEvent(JOIN_ROOM)
     public void handleJoinRoom(SocketIOClient client, String roomId) {
@@ -53,8 +61,14 @@ public class RoomJoinHandler {
                 client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "Unauthorized"));
                 return;
             }
+
+            if (Boolean.TRUE.equals(client.get(ROOM_RESTORE_IN_PROGRESS))) {
+                client.joinRoom(roomId);
+                return;
+            }
             
-            if (userRepository.findById(userId).isEmpty()) {
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null) {
                 client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "User not found"));
                 return;
             }
@@ -68,7 +82,7 @@ public class RoomJoinHandler {
             if (userRooms.isInRoom(userId, roomId)) {
                 log.debug("User {} already in room {}", userId, roomId);
                 client.joinRoom(roomId);
-                client.sendEvent(JOIN_ROOM_SUCCESS, Map.of("roomId", roomId));
+                client.sendEvent(JOIN_ROOM_SUCCESS, buildJoinRoomSuccessResponse(roomId, userId));
                 return;
             }
 
@@ -108,13 +122,11 @@ public class RoomJoinHandler {
                     .map(UserResponse::from)
                     .toList();
             
-            JoinRoomSuccessResponse response = JoinRoomSuccessResponse.builder()
-                .roomId(roomId)
-                .participants(participants)
-                .messages(messageLoadResult.getMessages())
-                .hasMore(messageLoadResult.isHasMore())
-                .activeStreams(Collections.emptyList())
-                .build();
+            JoinRoomSuccessResponse response = buildJoinRoomSuccessResponse(
+                roomId,
+                participants,
+                messageLoadResult
+            );
 
             client.sendEvent(JOIN_ROOM_SUCCESS, response);
 
@@ -122,9 +134,20 @@ public class RoomJoinHandler {
             socketIOServer.getRoomOperations(roomId)
                 .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage, null));
 
-            // 참가자 목록 업데이트 브로드캐스트
-            socketIOServer.getRoomOperations(roomId)
-                .sendEvent(PARTICIPANTS_UPDATE, participants);
+            if (participantDeltaEnabled) {
+                // 전체 목록은 입장한 사용자에게 보낸 joinRoomSuccess로만 전달한다.
+                // 기존 참여자에게는 새로 입장한 사용자 1명만 delta로 알린다.
+                socketIOServer.getRoomOperations(roomId)
+                    .sendEvent(PARTICIPANTS_UPDATE, client, ParticipantDeltaResponse.builder()
+                        .roomId(roomId)
+                        .type("joined")
+                        .participant(UserResponse.from(user))
+                        .build());
+            } else {
+                // 테스트 및 단계적 롤백을 위한 기존 전파 방식.
+                socketIOServer.getRoomOperations(roomId)
+                    .sendEvent(PARTICIPANTS_UPDATE, participants);
+            }
 
             log.info("User {} joined room {} successfully. Message count: {}, hasMore: {}",
                 userName, roomId, messageLoadResult.getMessages().size(), messageLoadResult.isHasMore());
@@ -149,5 +172,34 @@ public class RoomJoinHandler {
     private String getUserName(SocketIOClient client) {
         SocketUser user = getUser(client);
         return user != null ? user.name() : null;
+    }
+
+    private JoinRoomSuccessResponse buildJoinRoomSuccessResponse(String roomId, String userId) {
+        FetchMessagesRequest req = new FetchMessagesRequest(roomId, 30, null);
+        FetchMessagesResponse messageLoadResult = messageLoader.loadMessages(req, userId);
+
+        Room room = roomRepository.findById(roomId)
+            .orElseThrow(() -> new IllegalStateException("채팅방을 찾을 수 없습니다."));
+
+        List<UserResponse> participants = userRepository.findAllById(room.getParticipantIds())
+            .stream()
+            .map(UserResponse::from)
+            .toList();
+
+        return buildJoinRoomSuccessResponse(roomId, participants, messageLoadResult);
+    }
+
+    private JoinRoomSuccessResponse buildJoinRoomSuccessResponse(
+        String roomId,
+        List<UserResponse> participants,
+        FetchMessagesResponse messageLoadResult
+    ) {
+        return JoinRoomSuccessResponse.builder()
+            .roomId(roomId)
+            .participants(participants)
+            .messages(messageLoadResult.getMessages())
+            .hasMore(messageLoadResult.isHasMore())
+            .activeStreams(Collections.emptyList())
+            .build();
     }
 }

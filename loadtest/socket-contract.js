@@ -15,7 +15,7 @@ module.exports = {
     JOIN_ROOM_SUCCESS: 'joinRoomSuccess', // Payload: JoinRoomSuccessResponse
     JOIN_ROOM_ERROR: 'joinRoomError', // Payload: { message }
     PREVIOUS_MESSAGES_LOADED: 'previousMessagesLoaded', // Payload: { messages, hasMore, oldestTimestamp }
-    PARTICIPANTS_UPDATE: 'participantsUpdate', // Payload: List<UserDto>
+    PARTICIPANTS_UPDATE: 'participantsUpdate', // Payload: { roomId, type: joined|left, participant: UserDto }
     MESSAGES_READ: 'messagesRead', // Payload: { userId, messageIds }
     MESSAGE_REACTION_UPDATE: 'messageReactionUpdate', // Payload: { messageId, reactions }
     SESSION_ENDED: 'session_ended', // Payload: { reason, message } — snake_case가 서버 원문

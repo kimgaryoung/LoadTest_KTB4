@@ -16,6 +16,7 @@ export const useRoomHandling = ({
   actions,
   cleanup,
   handleReactionUpdate,
+  activeSocket,
 }) => {
   const { onReplace, asPath } = route;
   const { currentUser } = state;
@@ -43,6 +44,8 @@ export const useRoomHandling = ({
   const { user, refreshToken, logout } = useAuth();
   const setupPromiseRef = useRef(null);
   const roomEventsUnsubscribeRef = useRef(null);
+  const roomEventsSocketRef = useRef(null);
+  const roomEventsRoomIdRef = useRef(null);
   const MAX_SOCKET_RECONNECT_ATTEMPTS = 3;
   const MAX_MESSAGE_RETRY_ATTEMPTS = 3;
   const MESSAGE_TIMEOUT = 5000;
@@ -68,42 +71,71 @@ export const useRoomHandling = ({
     ]
   );
 
-  const setupEventListeners = useCallback(() => {
-    if (!socketRef.current || !mountedRef.current) return;
+  const roomEventCallbacksRef = useRef({
+    processMessages,
+    cleanup,
+    logout,
+    onReplace,
+    handleReactionUpdate,
+  });
 
-    if (roomEventsUnsubscribeRef.current) {
-      roomEventsUnsubscribeRef.current();
-      roomEventsUnsubscribeRef.current = null;
+  useEffect(() => {
+    roomEventCallbacksRef.current = {
+      processMessages,
+      cleanup,
+      logout,
+      onReplace,
+      handleReactionUpdate,
+    };
+  }, [cleanup, handleReactionUpdate, logout, onReplace, processMessages]);
+
+  const unsubscribeRoomEvents = useCallback(() => {
+    roomEventsUnsubscribeRef.current?.();
+    roomEventsUnsubscribeRef.current = null;
+    roomEventsSocketRef.current = null;
+    roomEventsRoomIdRef.current = null;
+  }, []);
+
+  const setupEventListeners = useCallback((socket = socketRef.current) => {
+    if (!socket?.connected || !mountedRef.current) return;
+
+    if (
+      roomEventsSocketRef.current === socket &&
+      roomEventsRoomIdRef.current === roomId &&
+      roomEventsUnsubscribeRef.current
+    ) {
+      return;
     }
 
+    unsubscribeRoomEvents();
     roomEventsUnsubscribeRef.current = socketClient.subscribeRoomEvents(
-      socketRef.current,
+      socket,
       createRoomEventHandlers({
+        roomId,
         mountedRef,
         messageProcessingRef,
         processedMessageIds,
         initialLoadCompletedRef,
-        processMessages,
+        processMessages: (...args) => roomEventCallbacksRef.current.processMessages(...args),
         setRoom,
         setMessages,
         setLoadingMessages,
         setError,
         setHasMoreMessages,
-        cleanup,
-        logout,
-        onReplace,
-        handleReactionUpdate,
+        cleanup: (...args) => roomEventCallbacksRef.current.cleanup(...args),
+        logout: (...args) => roomEventCallbacksRef.current.logout(...args),
+        onReplace: (...args) => roomEventCallbacksRef.current.onReplace(...args),
+        handleReactionUpdate: (...args) => roomEventCallbacksRef.current.handleReactionUpdate(...args),
         showRejectedMessage: Toast.error.bind(Toast),
       })
     );
+    roomEventsSocketRef.current = socket;
+    roomEventsRoomIdRef.current = roomId;
   }, [
-    processMessages,
+    roomId,
     setHasMoreMessages,
-    cleanup,
-    handleReactionUpdate,
     setLoadingMessages,
     setError,
-    logout,
     socketRef,
     mountedRef,
     messageProcessingRef,
@@ -111,8 +143,12 @@ export const useRoomHandling = ({
     initialLoadCompletedRef,
     setRoom,
     setMessages,
-    onReplace,
+    unsubscribeRoomEvents,
   ]);
+
+  useEffect(() => {
+    setupEventListeners(activeSocket);
+  }, [activeSocket, setupEventListeners]);
 
   const handleSessionError = useCallback(async () => {
     try {
@@ -233,12 +269,11 @@ export const useRoomHandling = ({
   );
 
   const joinRoom = useCallback(
-    async (roomId) => {
+    async (roomId, socket) => {
       if (!roomId || !mountedRef.current) {
         throw new Error('잘못된 채팅방 정보입니다.');
       }
 
-      const socket = socketRef.current;
       if (!socket?.connected) {
         throw new Error('Socket not connected');
       }
@@ -247,7 +282,7 @@ export const useRoomHandling = ({
       userRooms.current?.set(socket.id, roomId);
       return data;
     },
-    [socketRef, mountedRef, userRooms]
+    [mountedRef, userRooms]
   );
 
   // 재연결 뒤 필요한 것은 방 참가 상태 복구뿐이다. socket.io 가 같은 소켓을
@@ -259,7 +294,7 @@ export const useRoomHandling = ({
       return;
     }
 
-    const joinResult = await joinRoom(roomId);
+    const joinResult = await joinRoom(roomId, socket);
 
     if (Array.isArray(joinResult?.messages)) {
       processMessages(joinResult.messages, joinResult.hasMore, true);
@@ -334,11 +369,37 @@ export const useRoomHandling = ({
       try {
         initializingRef.current = true;
         setupStarted();
-        // 1. Socket Setup
-        attachSocket(await setupSocket());
+        // Socket connection and room metadata are independent setup operations.
+        let setupCancelled = false;
+        const socketPromise = setupSocket().then((socket) => {
+          if (setupCancelled || !mountedRef.current) {
+            socket.disconnect();
+            throw new Error('Chat room setup cancelled');
+          }
+          return socket;
+        });
 
-        // 2. Fetch Room Data
-        const roomData = await fetchRoomData(roomId);
+        let socket;
+        let roomData;
+        try {
+          [socket, roomData] = await Promise.all([
+            socketPromise,
+            fetchRoomData(roomId),
+          ]);
+        } catch (error) {
+          setupCancelled = true;
+          socketPromise
+            .then((connectedSocket) => connectedSocket.disconnect())
+            .catch(() => {});
+          throw error;
+        }
+
+        if (!mountedRef.current) {
+          socket.disconnect();
+          return;
+        }
+
+        attachSocket(socket);
 
         // Ensure current user is included in participants for display
         if (currentUser && roomData.participants) {
@@ -359,14 +420,18 @@ export const useRoomHandling = ({
           }
         }
 
-        // 3. Setup Event Listeners
+        // Setup Event Listeners
         if (mountedRef.current) {
-          setupEventListeners();
+          setupEventListeners(socket);
         }
 
-        // 4. Join Room and Load Messages
-        if (mountedRef.current && socketRef.current?.connected) {
-          const joinResult = await joinRoom(roomId);
+        // Join Room and Load Messages
+        if (mountedRef.current && socket.connected) {
+          const joinResult = await joinRoom(roomId, socket);
+
+          if (Array.isArray(joinResult?.participants)) {
+            roomData.participants = joinResult.participants;
+          }
 
           if (Array.isArray(joinResult?.messages)) {
             processMessages(joinResult.messages, joinResult.hasMore, true);
@@ -426,24 +491,36 @@ export const useRoomHandling = ({
   ]);
 
   useEffect(() => {
+    const trackedUserRooms = userRooms.current;
+
     return () => {
       setupPromiseRef.current = null;
       initializingRef.current = false;
       setupCompleteRef.current = false;
 
-      if (roomEventsUnsubscribeRef.current) {
-        roomEventsUnsubscribeRef.current();
-        roomEventsUnsubscribeRef.current = null;
-      }
+      unsubscribeRoomEvents();
 
       // 언마운트 경로는 attachSocket 을 쓰지 않는다. 사라지는 컴포넌트에
-       // 소켓 교체를 통지할 구독자가 없다.
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      // 소켓 교체를 통지할 구독자가 없다.
+      const socket = socketRef.current;
+      if (socket) {
+        if (socket.connected && trackedUserRooms?.get(socket.id) === roomId) {
+          roomEventCallbacksRef.current.cleanup('unmount');
+          trackedUserRooms.delete(socket.id);
+        }
+
+        socket.disconnect();
         socketRef.current = null;
       }
     };
-  }, []);
+  }, [
+    roomId,
+    socketRef,
+    userRooms,
+    initializingRef,
+    setupCompleteRef,
+    unsubscribeRoomEvents,
+  ]);
 
   return {
     setupRoom,
