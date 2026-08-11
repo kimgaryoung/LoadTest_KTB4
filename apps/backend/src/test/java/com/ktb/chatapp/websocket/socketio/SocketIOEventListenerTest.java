@@ -3,7 +3,6 @@ package com.ktb.chatapp.websocket.socketio;
 import com.corundumstudio.socketio.BroadcastOperations;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.ktb.chatapp.dto.RoomResponse;
-import com.ktb.chatapp.event.RoomActivityEvent;
 import com.ktb.chatapp.event.RoomUpdatedEvent;
 import com.ktb.chatapp.event.SessionEndedEvent;
 import java.util.Map;
@@ -15,7 +14,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.SESSION_ENDED;
-import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.ROOM_ACTIVITY;
 import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.ROOM_UPDATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -82,18 +80,4 @@ class SocketIOEventListenerTest {
         verify(roomListOperations).sendEvent(ROOM_UPDATE, roomResponse);
     }
 
-    @Test
-    void handleRoomActivityEvent_sendsRecentMessageCountToRoomList() {
-        RoomActivityEvent event = new RoomActivityEvent(this, "room-1", 12);
-        when(socketIOServer.getRoomOperations("room-list")).thenReturn(roomListOperations);
-
-        listener.handleRoomActivityEvent(event);
-
-        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(roomListOperations).sendEvent(eq(ROOM_ACTIVITY), payloadCaptor.capture());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> payload = (Map<String, Object>) payloadCaptor.getValue();
-        assertEquals("room-1", payload.get("_id"));
-        assertEquals(12, payload.get("recentMessageCount"));
-    }
 }

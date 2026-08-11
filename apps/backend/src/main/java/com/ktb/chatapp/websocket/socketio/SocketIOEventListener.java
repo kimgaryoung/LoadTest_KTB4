@@ -56,20 +56,6 @@ public class SocketIOEventListener {
     }
 
     @EventListener
-    public void handleRoomActivityEvent(RoomActivityEvent event) {
-        try {
-            socketIOServer.getRoomOperations(ROOM_LIST).sendEvent(ROOM_ACTIVITY, Map.of(
-                    "_id", event.getRoomId(),
-                    "recentMessageCount", event.getRecentMessageCount()
-            ));
-            log.debug("roomActivity 이벤트 발송: roomId={}, recentMessageCount={}",
-                    event.getRoomId(), event.getRecentMessageCount());
-        } catch (Exception e) {
-            log.error("roomActivity 이벤트 발송 실패: roomId={}", event.getRoomId(), e);
-        }
-    }
-
-    @EventListener
     public void handleAiMessageStartEvent(AiMessageStartEvent event) {
         try {
             Map<String, Object> data = Map.of(

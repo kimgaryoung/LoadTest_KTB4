@@ -165,13 +165,6 @@ channels:
         $ref: '#/components/messages/RoomResponse'
     description: 채팅방 정보 업데이트
 
-  roomActivity:
-    address: roomActivity
-    messages:
-      roomActivityResponse:
-        $ref: '#/components/messages/RoomActivityResponse'
-    description: 채팅방 활성도 업데이트
-
   messagesRead:
     address: messagesRead
     messages:
@@ -363,13 +356,6 @@ operations:
     summary: 채팅방 업데이트 수신
     description: 서버가 채팅방 정보 업데이트를 알립니다.
 
-  receiveRoomActivity:
-    action: receive
-    channel:
-      $ref: '#/channels/roomActivity'
-    summary: 채팅방 활성도 업데이트 수신
-    description: 서버가 채팅방의 최근 메시지 수 변화를 알립니다. 목록 화면 갱신에 사용합니다.
-
   receiveMessagesRead:
     action: receive
     channel:
@@ -558,24 +544,6 @@ components:
       contentType: application/json
       payload:
         $ref: '#/components/schemas/RoomResponse'
-
-    RoomActivityResponse:
-      name: RoomActivity
-      title: 채팅방 활성도 업데이트
-      summary: 채팅방 목록 화면의 활성도 지표 갱신 페이로드
-      contentType: application/json
-      payload:
-        type: object
-        properties:
-          _id:
-            type: string
-            description: 채팅방 ID
-          recentMessageCount:
-            type: integer
-            description: 최근 30분간 메시지 수
-        required:
-          - _id
-          - recentMessageCount
 
     MessagesReadResponse:
       name: MessagesRead
