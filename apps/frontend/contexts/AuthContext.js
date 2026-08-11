@@ -1,6 +1,5 @@
 import { createContext, useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { useRouter } from 'next/router';
-import socketService from '../services/socket';
 import authService from '../services/authService';
 import api, { getAuthHeaders } from '../lib/api/client';
 import {
@@ -25,6 +24,13 @@ export const useAuth = () => {
 };
 
 const TOKEN_VERIFICATION_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+// 공개 인증 화면의 초기 번들에 socket.io-client를 포함하지 않는다.
+// 실제로 연결을 정리해야 할 때만 기존 singleton 서비스를 불러온다.
+const disconnectSocket = () =>
+  import('../services/socket')
+    .then(({ default: socketService }) => socketService.disconnect())
+    .catch(() => {});
 
 /**
  * AuthProvider: 전역 인증 상태 관리
@@ -79,7 +85,7 @@ export const AuthProviderWithRouter = ({ children, router }) => {
       if (!currentUser) {
         // 세션 만료됨
         setUser(null);
-        socketService.disconnect();
+        disconnectSocket();
         router.replace('/');
       }
     }, 5 * 60 * 1000);
@@ -114,7 +120,7 @@ export const AuthProviderWithRouter = ({ children, router }) => {
       console.error('Logout error:', error);
     } finally {
       // 소켓 연결 해제
-      socketService.disconnect();
+      disconnectSocket();
 
       // 로컬 상태 정리
       saveUser(null);
