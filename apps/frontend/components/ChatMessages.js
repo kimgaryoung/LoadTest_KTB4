@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
 import { Spinner, Text, VStack } from '@vapor-ui/core';
 import SystemMessage from './SystemMessage';
 import FileMessage from './FileMessage';
@@ -39,6 +39,9 @@ const ChatMessages = ({
   onReactionRemove = () => {},
   onLoadMore = () => {}
 }) => {
+  const orderedMessages = Array.isArray(messages) ? messages : [];
+  const currentUserId = currentUser?.id;
+
   // 무한 스크롤 훅
   const { sentinelRef } = useInfiniteScroll(
     onLoadMore,
@@ -48,29 +51,20 @@ const ChatMessages = ({
 
   // 자동 스크롤 훅 (스크롤 복원 기능 포함)
   const { containerRef, scrollToBottom, isNearBottom } = useAutoScroll(
-    messages,
-    currentUser?.id,
+    orderedMessages,
+    currentUserId,
     loadingMessages,
     100 // 하단 100px 이내면 자동 스크롤
   );
   const isMine = useCallback((msg) => {
-    if (!msg?.sender || !currentUser?.id) return false;
+    if (!msg?.sender || !currentUserId) return false;
     
     return (
-      msg.sender._id === currentUser.id || 
-      msg.sender.id === currentUser.id ||
-      msg.sender === currentUser.id
+      msg.sender._id === currentUserId ||
+      msg.sender.id === currentUserId ||
+      msg.sender === currentUserId
     );
-  }, [currentUser?.id]);
-
-  const allMessages = useMemo(() => {
-    if (!Array.isArray(messages)) return [];
-
-    return [...messages].sort((a, b) => {
-      if (!a?.timestamp || !b?.timestamp) return 0;
-      return new Date(a.timestamp) - new Date(b.timestamp);
-    });
-  }, [messages]);
+  }, [currentUserId]);
 
   const renderMessage = useCallback((msg, idx) => {
     if (!msg) return null;
@@ -135,14 +129,14 @@ const ChatMessages = ({
         </div>
       )}
 
-      {!hasMoreMessages && messages.length > 0 && (
+      {!hasMoreMessages && orderedMessages.length > 0 && (
         <MessageHistoryEnd />
       )}
 
-      {allMessages.length === 0 ? (
+      {orderedMessages.length === 0 ? (
         <EmptyMessages />
       ) : (
-        allMessages.map((msg, idx) => renderMessage(msg, idx))
+        orderedMessages.map((msg, idx) => renderMessage(msg, idx))
       )}
     </VStack>
   );
