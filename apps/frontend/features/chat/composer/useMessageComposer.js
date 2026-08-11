@@ -34,7 +34,7 @@ export const useMessageComposer = () => {
 
   const getFilteredParticipants = useCallback(
     (room) => {
-      if (!room?.participants) return [];
+      if (!Array.isArray(room?.participants)) return [];
 
       return room.participants.filter(
         (user) =>

@@ -86,7 +86,7 @@ public class MessageReadHandler {
             
             messageReadStatusService.updateReadStatus(messageIds, userId);
 
-            MessagesReadResponse response = new MessagesReadResponse(userId, messageIds);
+            MessagesReadResponse response = new MessagesReadResponse(roomId, userId, messageIds);
 
             // Broadcast to room
             socketIOServer.getRoomOperations(roomId)

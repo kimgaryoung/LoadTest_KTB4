@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MessageReactionResponse {
+    private String roomId;
     private String messageId;
     private Map<String, Set<String>> reactions;
 }

@@ -4,6 +4,7 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnEvent;
 import com.ktb.chatapp.dto.MessageResponse;
+import com.ktb.chatapp.dto.ParticipantDeltaResponse;
 import com.ktb.chatapp.dto.UserResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.MessageType;
@@ -18,9 +19,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -42,6 +43,9 @@ public class RoomLeaveHandler {
     private final UserRepository userRepository;
     private final UserRooms userRooms;
     private final MessageResponseMapper messageResponseMapper;
+
+    @Value("${socketio.participant-delta.enabled:false}")
+    private boolean participantDeltaEnabled;
     
     @OnEvent(LEAVE_ROOM)
     public void handleLeaveRoom(SocketIOClient client, String roomId) {
@@ -67,9 +71,15 @@ public class RoomLeaveHandler {
                 return;
             }
             
-            roomRepository.removeParticipant(roomId, userId);
-            
             client.leaveRoom(roomId);
+
+            if (hasAnotherClientInRoom(roomId, userId, client)) {
+                log.debug("Skip participant removal for user {} in room {} because another socket is still joined",
+                        userId, roomId);
+                return;
+            }
+
+            roomRepository.removeParticipant(roomId, userId);
             userRooms.remove(userId, roomId);
             
             log.info("User {} left room {}", userName, room.getName());
@@ -77,12 +87,23 @@ public class RoomLeaveHandler {
             log.debug("Leave room cleanup - roomId: {}, userId: {}", roomId, userId);
             
             sendSystemMessage(roomId, userName + "님이 퇴장하였습니다.");
-            broadcastParticipantList(roomId);
+            if (participantDeltaEnabled) {
+                broadcastParticipantDelta(roomId, user);
+            } else {
+                broadcastParticipantList(roomId);
+            }
 
         } catch (Exception e) {
             log.error("Error handling leaveRoom", e);
             client.sendEvent(ERROR, Map.of("message", "채팅방 퇴장 중 오류가 발생했습니다."));
         }
+    }
+
+    private boolean hasAnotherClientInRoom(String roomId, String userId, SocketIOClient leavingClient) {
+        return socketIOServer.getRoomOperations(roomId).getClients().stream()
+                .filter(client -> !client.getSessionId().equals(leavingClient.getSessionId()))
+                .map(this::getUserId)
+                .anyMatch(userId::equals);
     }
     
     private void sendSystemMessage(String roomId, String content) {
@@ -108,21 +129,31 @@ public class RoomLeaveHandler {
         }
     }
     
+    private void broadcastParticipantDelta(String roomId, User user) {
+        // client.leaveRoom(roomId)가 먼저 실행되어 퇴장한 사용자에게는 전송되지 않는다.
+        socketIOServer.getRoomOperations(roomId)
+                .sendEvent(PARTICIPANTS_UPDATE, ParticipantDeltaResponse.builder()
+                        .roomId(roomId)
+                        .type("left")
+                        .participant(UserResponse.from(user))
+                .build());
+    }
+
     private void broadcastParticipantList(String roomId) {
-        Optional<Room> roomOpt = roomRepository.findById(roomId);
+        var roomOpt = roomRepository.findById(roomId);
         if (roomOpt.isEmpty()) {
             return;
         }
-        
+
         var participantList = userRepository.findAllById(roomOpt.get().getParticipantIds())
                 .stream()
                 .map(UserResponse::from)
                 .toList();
-        
+
         if (participantList.isEmpty()) {
             return;
         }
-        
+
         socketIOServer.getRoomOperations(roomId)
                 .sendEvent(PARTICIPANTS_UPDATE, participantList);
     }

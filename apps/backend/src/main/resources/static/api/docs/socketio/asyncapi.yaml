@@ -149,7 +149,7 @@ channels:
     messages:
       participantsUpdateResponse:
         $ref: '#/components/messages/ParticipantsUpdateResponse'
-    description: 참가자 업데이트
+    description: 참가자 입장/퇴장 delta 업데이트. 전체 참가자 목록은 joinRoomSuccess를 받은 사용자에게만 전달됩니다.
 
   roomCreated:
     address: roomCreated
@@ -530,12 +530,25 @@ components:
     ParticipantsUpdateResponse:
       name: ParticipantsUpdate
       title: 참가자 업데이트
-      summary: 참가자 목록 업데이트 페이로드
+      summary: 참가자 입장/퇴장 delta 페이로드
       contentType: application/json
       payload:
-        type: array
-        items:
-          $ref: '#/components/schemas/UserResponse'
+        type: object
+        properties:
+          roomId:
+            type: string
+            description: 변경이 발생한 채팅방 ID
+          type:
+            type: string
+            enum: [joined, left]
+            description: 참가자 변경 종류
+          participant:
+            $ref: '#/components/schemas/UserResponse'
+            description: 변경된 참가자
+        required:
+          - roomId
+          - type
+          - participant
 
     RoomResponse:
       name: RoomResponse
@@ -553,6 +566,9 @@ components:
       payload:
         type: object
         properties:
+          roomId:
+            type: string
+            description: 읽음 상태가 변경된 채팅방 ID
           userId:
             type: string
             description: 읽은 사용자 ID
@@ -562,6 +578,7 @@ components:
               type: string
             description: 읽은 메시지 ID 목록
         required:
+          - roomId
           - userId
           - messageIds
 
@@ -573,6 +590,9 @@ components:
       payload:
         type: object
         properties:
+          roomId:
+            type: string
+            description: 리액션이 변경된 채팅방 ID
           messageId:
             type: string
             description: 메시지 ID
@@ -584,6 +604,7 @@ components:
                 type: string
             description: 리액션 맵 (이모지 -> 사용자 ID 배열)
         required:
+          - roomId
           - messageId
           - reactions
 

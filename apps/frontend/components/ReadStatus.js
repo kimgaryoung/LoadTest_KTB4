@@ -1,98 +1,41 @@
-import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { ConfirmOutlineIcon } from '@vapor-ui/icons';
 import { Text, HStack } from '@vapor-ui/core';
-import socketClient from '@/lib/socket/socketClient';
 
-const ReadStatus = ({ 
+const EMPTY_PARTICIPANTS = [];
+const EMPTY_READERS = [];
+
+const ReadStatus = ({
   messageType = 'text',
-  participants = [],
-  readers = [],
+  participants = EMPTY_PARTICIPANTS,
+  readers = EMPTY_READERS,
+  senderId = null,
   className = '',
-  messageId = null,
-  messageRef = null, // 메시지 요소의 ref 추가
-  currentUserId = null // 현재 사용자 ID 추가
 }) => {
-  const [hasMarkedAsRead, setHasMarkedAsRead] = useState(false);
-  const statusRef = useRef(null);
-  const observerRef = useRef(null);
+  const participantList = Array.isArray(participants) ? participants : EMPTY_PARTICIPANTS;
 
-  // 읽지 않은 참여자 명단 생성 
-  const unreadParticipants = useMemo(() => {
-    if (messageType === 'system') return [];
-    
-    return participants.filter(participant => 
-      !readers.some(reader => 
-        reader.userId === participant._id || 
-        reader.userId === participant.id
-      )
-    );
-  }, [participants, readers, messageType]);
-
-  // 읽지 않은 참여자 수 계산
   const unreadCount = useMemo(() => {
     if (messageType === 'system') {
       return 0;
     }
-    return unreadParticipants.length;
-  }, [unreadParticipants.length, messageType]);
 
-  // 메시지를 읽음으로 표시하는 함수
-  const markMessageAsRead = useCallback(async () => {
-    if (!messageId || !currentUserId || hasMarkedAsRead || 
-        messageType === 'system' || !socketClient.canSend()) {
-      return;
-    }
+    const readUserIds = new Set(readers.flatMap(reader => (
+      [reader?.userId, reader?._id, reader?.id].filter(Boolean)
+    )));
 
-    try {
-      // Socket.IO를 통해 서버에 읽음 상태 전송
-      socketClient.markMessagesAsRead([messageId]);
+    return participantList.reduce((count, participant) => {
+      const participantId = participant._id || participant.id;
 
-      setHasMarkedAsRead(true);
-
-    } catch (error) {
-      console.error('Error marking message as read:', error);
-    }
-  }, [messageId, currentUserId, hasMarkedAsRead, messageType]);
-
-  // Intersection Observer 설정
-  useEffect(() => {
-    if (!messageRef?.current || !currentUserId || hasMarkedAsRead || messageType === 'system') {
-      return;
-    }
-
-    // 이미 읽은 메시지인지 확인
-    const isAlreadyRead = readers.some(reader => 
-      reader.userId === currentUserId
-    );
-
-    if (isAlreadyRead) {
-      setHasMarkedAsRead(true);
-      return;
-    }
-
-    const observerOptions = {
-      root: null,
-      rootMargin: '0px',
-      threshold: 0.5 // 메시지의 50%가 보여야 읽음으로 처리
-    };
-
-    const handleIntersect = (entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting && !hasMarkedAsRead) {
-          markMessageAsRead();
-        }
-      });
-    };
-
-    observerRef.current = new IntersectionObserver(handleIntersect, observerOptions);
-    observerRef.current.observe(messageRef.current);
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      // The sender does not need to mark their own message as read.
+      if (senderId && participantId === senderId) {
+        return count;
       }
-    };
-  }, [messageRef, currentUserId, hasMarkedAsRead, messageType, readers, markMessageAsRead]);
+
+      return readUserIds.has(participant._id) || readUserIds.has(participant.id)
+        ? count
+        : count + 1;
+    }, 0);
+  }, [participantList, readers, messageType, senderId]);
 
   // 시스템 메시지는 읽음 상태 표시 안 함
   if (messageType === 'system') {
@@ -104,7 +47,6 @@ const ReadStatus = ({
     return (
       <HStack
         className={className}
-        ref={statusRef}
         $css={{ gap: '$050', alignItems: 'center' }}
         role="status"
         aria-label="모든 참여자가 메시지를 읽었습니다"
@@ -123,7 +65,6 @@ const ReadStatus = ({
   return (
     <HStack
       className={className}
-      ref={statusRef}
       $css={{ gap: '$050', alignItems: 'center' }}
       role="status"
       aria-label={`${unreadCount}명이 메시지를 읽지 않았습니다`}

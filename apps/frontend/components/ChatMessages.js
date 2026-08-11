@@ -6,6 +6,10 @@ import FileMessage from './FileMessage';
 import UserMessage from './UserMessage';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
+const NOOP = () => {};
+const MESSAGE_ROW_ESTIMATE = 128;
+const INITIAL_RENDERED_ROW_COUNT = 14;
+
 const LoadingIndicator = React.memo(() => (
   <div className="loading-messages">
     <Spinner size="md" colorPalette="primary" aria-label="이전 메시지 로딩 중" />
@@ -35,29 +39,27 @@ const ChatMessages = ({
   room = null,
   loadingMessages = false,
   hasMoreMessages = true,
-  onReactionAdd = () => {},
-  onReactionRemove = () => {},
-  onLoadMore = () => {}
+  onReactionAdd = NOOP,
+  onReactionRemove = NOOP,
+  onLoadMore = NOOP,
+  onVisibleMessagesRead = NOOP
 }) => {
-  const currentUserId = currentUser?.id;
-
-  // 무한 스크롤 훅
+  const currentUserId = currentUser?._id || currentUser?.id;
   const { sentinelRef } = useInfiniteScroll(
     onLoadMore,
     hasMoreMessages,
     loadingMessages
   );
 
-  const containerRef = useRef(null);
   const [scrollElement, setScrollElement] = useState(null);
   const initialScrollMessageKeyRef = useRef(null);
   const isNearBottomRef = useRef(true);
   const previousLatestMessageKeyRef = useRef(null);
   const previousLoadingMessagesRef = useRef(false);
   const previousLoadAnchorRef = useRef(null);
+  const requestedReadMessageIdsRef = useRef(new Set());
 
   const setContainerRef = useCallback((node) => {
-    containerRef.current = node;
     setScrollElement(node);
   }, []);
   const isMine = useCallback((msg) => {
@@ -76,14 +78,18 @@ const ChatMessages = ({
     () => (Array.isArray(messages) ? messages : []),
     [messages]
   );
+  const getItemKey = useCallback(
+    (index) => allMessages[index]?._id || `msg-${index}`,
+    [allMessages]
+  );
 
   // TanStack Virtual returns imperative helpers that React Compiler cannot memoize safely.
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: allMessages.length,
     getScrollElement: () => scrollElement,
-    getItemKey: (index) => allMessages[index]?._id || `msg-${index}`,
-    estimateSize: () => 128,
+    getItemKey,
+    estimateSize: () => MESSAGE_ROW_ESTIMATE,
     overscan: 8,
     initialRect: {
       width: 0,
@@ -91,17 +97,66 @@ const ChatMessages = ({
     },
   });
   const measuredVirtualRows = rowVirtualizer.getVirtualItems();
+  const initialVirtualRows = useMemo(
+    () => allMessages.slice(0, INITIAL_RENDERED_ROW_COUNT).map((message, index) => ({
+      index,
+      key: message?._id || `msg-${index}`,
+      start: index * MESSAGE_ROW_ESTIMATE,
+    })),
+    [allMessages]
+  );
   const virtualRows = measuredVirtualRows.length > 0
     ? measuredVirtualRows
-    : allMessages.slice(0, 14).map((message, index) => ({
-        index,
-        key: message?._id || `msg-${index}`,
-        start: index * 128,
-      }));
-  const totalVirtualSize = rowVirtualizer.getTotalSize() || allMessages.length * 128;
+    : initialVirtualRows;
+  const totalVirtualSize = rowVirtualizer.getTotalSize()
+    || allMessages.length * MESSAGE_ROW_ESTIMATE;
   const latestMessage = allMessages[allMessages.length - 1];
   const latestMessageKey = latestMessage?._id || latestMessage?.timestamp;
 
+  useEffect(() => {
+    if (!currentUserId || virtualRows.length === 0) {
+      return;
+    }
+
+    const visibleUnreadMessageIds = [];
+
+    virtualRows.forEach((virtualRow) => {
+      const message = allMessages[virtualRow.index];
+      if (!message?._id || message.type === 'system') {
+        return;
+      }
+
+      if (requestedReadMessageIdsRef.current.has(message._id)) {
+        return;
+      }
+
+      const senderId = message.sender?._id || message.sender?.id || message.sender;
+      if (senderId === currentUserId) {
+        return;
+      }
+
+      const isReadByCurrentUser = message.readers?.some(reader => (
+        reader.userId === currentUserId || reader._id === currentUserId
+      ));
+
+      if (!isReadByCurrentUser) {
+        visibleUnreadMessageIds.push(message._id);
+      }
+    });
+
+    if (visibleUnreadMessageIds.length === 0) {
+      return;
+    }
+
+    const accepted = onVisibleMessagesRead(visibleUnreadMessageIds);
+    if (accepted === false) {
+      return;
+    }
+
+    visibleUnreadMessageIds.forEach((messageId) => {
+      requestedReadMessageIdsRef.current.add(messageId);
+    });
+  }, [allMessages, currentUserId, onVisibleMessagesRead, virtualRows]);
   const getIsNearBottom = useCallback(() => {
     if (!scrollElement) return true;
 
@@ -133,6 +188,7 @@ const ChatMessages = ({
     previousLatestMessageKeyRef.current = null;
     previousLoadingMessagesRef.current = false;
     previousLoadAnchorRef.current = null;
+    requestedReadMessageIdsRef.current.clear();
   }, [roomKey]);
 
   useLayoutEffect(() => {

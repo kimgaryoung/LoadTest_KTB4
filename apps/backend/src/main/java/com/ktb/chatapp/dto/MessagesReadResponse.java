@@ -10,6 +10,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MessagesReadResponse {
+    private String roomId;
     private String userId;
     private List<String> messageIds;
 }

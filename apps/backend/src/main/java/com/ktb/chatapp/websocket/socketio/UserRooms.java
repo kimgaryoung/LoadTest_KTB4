@@ -40,9 +40,10 @@ public class UserRooms {
      * @param roomId the room ID to add to the user's room set
      */
     public void add(String userId, String roomId) {
-        Set<String> rooms = new HashSet<>(get(userId));
-        rooms.add(roomId);
-        chatDataStore.set(buildKey(userId), rooms);
+        updateRooms(userId, rooms -> {
+            rooms.add(roomId);
+            return rooms;
+        });
     }
 
     /**
@@ -52,13 +53,10 @@ public class UserRooms {
      * @param roomId the room ID to remove
      */
     public void remove(String userId, String roomId) {
-        Set<String> rooms = new HashSet<>(get(userId));
-        rooms.remove(roomId);
-        if (rooms.isEmpty()) {
-            chatDataStore.delete(buildKey(userId));
-        } else {
-            chatDataStore.set(buildKey(userId), rooms);
-        }
+        updateRooms(userId, rooms -> {
+            rooms.remove(roomId);
+            return rooms.isEmpty() ? null : rooms;
+        });
     }
 
     /**
@@ -86,6 +84,14 @@ public class UserRooms {
     }
     
     public void removeAllRooms(String userId) {
-        get(userId).forEach(roomId -> remove(userId, roomId));
+        chatDataStore.delete(buildKey(userId));
+    }
+
+    private void updateRooms(String userId, java.util.function.UnaryOperator<Set<String>> updater) {
+        chatDataStore.update(
+                buildKey(userId),
+                Set.class,
+                HashSet::new,
+                rooms -> updater.apply(new HashSet<>(rooms)));
     }
 }

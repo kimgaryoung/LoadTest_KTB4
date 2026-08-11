@@ -32,7 +32,7 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
   };
 
   const status = getConnectionStatus();
-  const participants = room?.participants || [];
+  const participants = Array.isArray(room?.participants) ? room.participants : [];
   const maxVisibleAvatars = 3;
   const remainingCount = Math.max(0, participants.length - maxVisibleAvatars);
 

@@ -31,45 +31,51 @@ export const useServerConnection = () => {
     return Math.min(delay, RETRY_CONFIG.maxDelay);
   }, []);
 
-  const attemptConnection = useCallback(async (retryAttempt = 0) => {
-    try {
-      setConnectionStatus(CONNECTION_STATUS.CONNECTING);
+  const attemptConnection = useCallback(async () => {
+    for (let retryAttempt = 0; retryAttempt <= RETRY_CONFIG.maxRetries; retryAttempt += 1) {
+      try {
+        setConnectionStatus(CONNECTION_STATUS.CONNECTING);
 
-      const response = await axiosInstance.get('/api/health', {
-        timeout: HEALTH_TIMEOUT_MS,
-        retries: 1,
-      });
+        const response = await axiosInstance.get('/api/health', {
+          timeout: HEALTH_TIMEOUT_MS,
+          // Health check retries are owned by this hook. Do not also apply the
+          // API client's generic retry policy, which multiplies wait time.
+          retry: false,
+        });
 
-      if (response?.status === 401) {
+        if (response?.status === 401) {
+          setConnectionStatus(CONNECTION_STATUS.ERROR);
+          throw new Error('AUTH_EXPIRED');
+        }
+
+        const isConnected =
+          response?.data?.status === 'ok' && response?.status === 200;
+
+        if (isConnected) {
+          setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+          setRetryCount(0);
+          return true;
+        }
+
+        throw new Error('Server not ready');
+      } catch (error) {
+        if (error.response?.status === 401 || error.message === 'AUTH_EXPIRED') {
+          setConnectionStatus(CONNECTION_STATUS.ERROR);
+          throw new Error('AUTH_EXPIRED');
+        }
+
+        if (!error.response && retryAttempt < RETRY_CONFIG.maxRetries) {
+          const delay = getRetryDelay(retryAttempt);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
         setConnectionStatus(CONNECTION_STATUS.ERROR);
-        throw new Error('AUTH_EXPIRED');
+        throw new Error('SERVER_UNREACHABLE');
       }
-
-      const isConnected =
-        response?.data?.status === 'ok' && response?.status === 200;
-
-      if (isConnected) {
-        setConnectionStatus(CONNECTION_STATUS.CONNECTED);
-        setRetryCount(0);
-        return true;
-      }
-
-      throw new Error('Server not ready');
-    } catch (error) {
-      if (error.response?.status === 401 || error.message === 'AUTH_EXPIRED') {
-        setConnectionStatus(CONNECTION_STATUS.ERROR);
-        throw new Error('AUTH_EXPIRED');
-      }
-
-      if (!error.response && retryAttempt < RETRY_CONFIG.maxRetries) {
-        const delay = getRetryDelay(retryAttempt);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return attemptConnection(retryAttempt + 1);
-      }
-
-      setConnectionStatus(CONNECTION_STATUS.ERROR);
-      throw new Error('SERVER_UNREACHABLE');
     }
+
+    throw new Error('SERVER_UNREACHABLE');
   }, [getRetryDelay]);
 
   return {

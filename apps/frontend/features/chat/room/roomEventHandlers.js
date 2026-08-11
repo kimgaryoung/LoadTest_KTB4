@@ -68,7 +68,83 @@ export const appendIncomingMessage = (messages, incoming) => {
   return insertUniqueChronologicalMessage(messages, incoming);
 };
 
+const normalizeParticipants = (participants) => (
+  Array.isArray(participants) ? participants : []
+);
+
+const isEventForAnotherRoom = (payload, roomId) => {
+  const eventRoomId = payload?.roomId || payload?.room;
+  return Boolean(eventRoomId && eventRoomId !== roomId);
+};
+
+const applyParticipantDelta = (participants, delta) => {
+  const currentParticipants = normalizeParticipants(participants);
+
+  if (!delta || typeof delta !== 'object' || !delta.participant) {
+    return currentParticipants;
+  }
+
+  const participant = delta.participant;
+  const participantId = participant.id || participant._id;
+  if (!participantId) {
+    return currentParticipants;
+  }
+
+  const participantKey = (item) => item?.id || item?._id;
+  const existingIndex = currentParticipants.findIndex(item => participantKey(item) === participantId);
+
+  if (delta.type === 'left') {
+    return existingIndex === -1
+      ? currentParticipants
+      : currentParticipants.filter((_, index) => index !== existingIndex);
+  }
+
+  if (delta.type === 'joined' && existingIndex === -1) {
+    return [...currentParticipants, participant];
+  }
+
+  return currentParticipants;
+};
+
+const normalizeParticipantUpdate = (payload) => {
+  if (Array.isArray(payload)) {
+    return { type: 'list', participants: payload };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  if (Array.isArray(payload.participants)) {
+    return { type: 'list', participants: payload.participants };
+  }
+
+  const nestedPayload = payload.data;
+  if (Array.isArray(nestedPayload)) {
+    return { type: 'list', participants: nestedPayload };
+  }
+
+  if (nestedPayload && typeof nestedPayload === 'object') {
+    if (Array.isArray(nestedPayload.participants)) {
+      return { type: 'list', participants: nestedPayload.participants };
+    }
+
+    if (nestedPayload.participant && nestedPayload.type) {
+      return nestedPayload;
+    }
+  }
+
+  if (
+    (payload.type === 'joined' || payload.type === 'left') &&
+    payload.participant
+  ) {
+    return payload;
+  }
+
+  return null;
+};
 export const createRoomEventHandlers = ({
+  roomId,
   mountedRef,
   messageProcessingRef,
   processedMessageIds,
@@ -106,16 +182,31 @@ export const createRoomEventHandlers = ({
   };
 
   return {
-    onParticipantsUpdate: (participants) => {
+    onParticipantsUpdate: (payload) => {
       if (!mountedRef.current) return;
-      setRoom(prev => ({ ...prev, participants: participants || [] }));
+      const update = normalizeParticipantUpdate(payload);
+
+      if (update?.roomId && update.roomId !== roomId) {
+        return;
+      }
+
+      setRoom(prev => ({
+        ...prev,
+        participants: update?.type === 'list'
+          ? update.participants
+          : update
+            ? applyParticipantDelta(prev?.participants, update)
+            : normalizeParticipants(prev?.participants),
+      }));
     },
     onMessagesRead: (payload) => {
       if (!mountedRef.current) return;
+      if (isEventForAnotherRoom(payload, roomId)) return;
       setMessages(prev => applyReadReceipts(prev, payload));
     },
     onMessage: (incoming) => {
       if (!mountedRef.current || messageProcessingRef.current) return;
+      if (isEventForAnotherRoom(incoming, roomId)) return;
       if (!incoming?._id || processedMessageIds.current.has(incoming._id)) return;
       processedMessageIds.current.add(incoming._id);
       setMessages(prev => appendIncomingMessage(prev, incoming));
@@ -123,6 +214,7 @@ export const createRoomEventHandlers = ({
     onPreviousMessagesLoaded: handlePreviousMessages,
     onMessageReactionUpdate: (data) => {
       if (!mountedRef.current) return;
+      if (isEventForAnotherRoom(data, roomId)) return;
       handleReactionUpdate(data);
     },
     onSessionEnded: () => {

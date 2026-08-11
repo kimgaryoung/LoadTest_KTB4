@@ -1,6 +1,8 @@
 package com.ktb.chatapp.websocket.socketio;
 
 import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * Data store interface for chat-related data storage.
@@ -32,6 +34,12 @@ public interface ChatDataStore {
      * @param key the storage key
      */
     void delete(String key);
+
+    /**
+     * Atomically read, transform and store a value. Returning {@code null} from
+     * the updater deletes the value.
+     */
+    <T> T update(String key, Class<T> type, Supplier<T> initialValue, UnaryOperator<T> updater);
     
     int size();
 }
