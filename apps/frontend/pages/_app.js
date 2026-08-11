@@ -1,17 +1,18 @@
 import React from 'react';
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { ThemeProvider } from '@vapor-ui/core';
 import '@vapor-ui/core/styles.css';
 import '../styles/globals.css';
+import ChatHeader from '@/components/ChatHeader';
 import ToastContainer from '@/components/Toast';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { SocketProvider } from '@/lib/socket/SocketProvider';
 
-const AuthenticatedPageShell = dynamic(
-  () => import('@/components/AuthenticatedPageShell')
-);
+const AuthenticatedSocketProvider = ({ children }) => {
+  const { user } = useAuth();
 
-const PUBLIC_ROUTES = new Set(['/', '/login', '/register']);
+  return <SocketProvider session={user}>{children}</SocketProvider>;
+};
 
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
@@ -21,19 +22,17 @@ function MyApp({ Component, pageProps }) {
     return <Component {...pageProps} />;
   }
 
-  const isPublicRoute = PUBLIC_ROUTES.has(router.pathname);
+  // 로그인/회원가입 페이지에서는 헤더 숨김
+  const showHeader = !['/', '/register'].includes(router.pathname);
 
   return (
     <ThemeProvider defaultTheme="dark">
       <AuthProvider>
-        {isPublicRoute ? (
+        <AuthenticatedSocketProvider>
+          {showHeader && <ChatHeader />}
           <Component {...pageProps} />
-        ) : (
-          <AuthenticatedPageShell>
-            <Component {...pageProps} />
-          </AuthenticatedPageShell>
-        )}
-        <ToastContainer />
+          <ToastContainer />
+        </AuthenticatedSocketProvider>
       </AuthProvider>
     </ThemeProvider>
   );
