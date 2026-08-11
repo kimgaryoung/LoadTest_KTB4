@@ -94,19 +94,8 @@ describe('ChatRoomsView', () => {
     expect(mocks.fetchRooms).toHaveBeenCalledTimes(1);
   });
 
-  it('refreshes the room list on an interval while connected', async () => {
+  it('does not poll the room list while connected', async () => {
     mocks.connectionStatus = CONNECTION_STATUS.CONNECTED;
-    vi.useFakeTimers();
-
-    render(<ChatRoomsView router={{ push: vi.fn() }} />);
-
-    await vi.advanceTimersByTimeAsync(30000);
-
-    expect(mocks.refreshRooms).toHaveBeenCalledWith({ silent: true });
-  });
-
-  it('does not auto refresh while the server connection is not established', async () => {
-    mocks.connectionStatus = CONNECTION_STATUS.DISCONNECTED;
     vi.useFakeTimers();
 
     render(<ChatRoomsView router={{ push: vi.fn() }} />);
@@ -114,20 +103,6 @@ describe('ChatRoomsView', () => {
     await vi.advanceTimersByTimeAsync(90000);
 
     expect(mocks.refreshRooms).not.toHaveBeenCalled();
-  });
-
-  it('catches up as soon as the tab becomes visible again', async () => {
-    mocks.connectionStatus = CONNECTION_STATUS.CONNECTED;
-
-    render(<ChatRoomsView router={{ push: vi.fn() }} />);
-
-    await waitFor(() => {
-      expect(mocks.fetchRooms).toHaveBeenCalled();
-    });
-
-    document.dispatchEvent(new Event('visibilitychange'));
-
-    expect(mocks.refreshRooms).toHaveBeenCalledWith({ silent: true });
   });
 
   it('refreshes the list when the refresh button is clicked', async () => {

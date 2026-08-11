@@ -24,9 +24,8 @@ const RoomsTable = ({ rooms, connectionStatus, onJoinRoom }) => {
       <Table.Root style={{ width: '100%' }}>
         <Table.ColumnGroup>
           <Table.Column style={{ width: '40%' }} />
-          <Table.Column style={{ width: '12%' }} />
-          <Table.Column style={{ width: '12%' }} />
-          <Table.Column style={{ width: '21%' }} />
+          <Table.Column style={{ width: '15%' }} />
+          <Table.Column style={{ width: '30%' }} />
           <Table.Column style={{ width: '15%' }} />
         </Table.ColumnGroup>
 
@@ -34,7 +33,6 @@ const RoomsTable = ({ rooms, connectionStatus, onJoinRoom }) => {
           <Table.Row>
             <Table.Heading>채팅방</Table.Heading>
             <Table.Heading>참여자</Table.Heading>
-            <Table.Heading>최근 메시지</Table.Heading>
             <Table.Heading>생성일</Table.Heading>
             <Table.Heading>액션</Table.Heading>
           </Table.Row>
@@ -61,9 +59,6 @@ const RoomsTable = ({ rooms, connectionStatus, onJoinRoom }) => {
                   <GroupIcon />
                   <Text typography="body2">{room.participants?.length || 0}</Text>
                 </HStack>
-              </Table.Cell>
-              <Table.Cell>
-                {room.recentMessageCount > 0 ? room.recentMessageCount : '-'}
               </Table.Cell>
               <Table.Cell>
                 <time dateTime={new Date(room.createdAt).toISOString()}>
