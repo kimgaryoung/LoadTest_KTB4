@@ -15,7 +15,8 @@
 - 다음 소스에서 메트릭 수집:
   - Spring Boot Actuator (`/actuator/prometheus`)
   - MongoDB Exporter (포트 9216)
-  - Redis Exporter (포트 9121)
+  - Redis A(auth) Exporter (호스트 포트 9121)
+  - Redis B(realtime) Exporter (호스트 포트 9122)
   - Node Exporter (포트 9100) - 서버 리소스 모니터링
 
 ### Grafana (v11.4.0)
@@ -29,8 +30,8 @@
 - 포트: 9216
 - 연결, 작업, 메모리, 락 상태 모니터링
 
-### Redis Exporter (v1.80.0)
-- Redis 메트릭 수집
+### Redis Exporter (v1.86.0)
+- Redis A/B 메트릭을 각각 수집하고 Prometheus `role=auth|realtime` label로 구분
 - 포트: 9121
 - 메모리, 키, 명령어, 캐시 히트율 모니터링
 
@@ -108,10 +109,9 @@ node-exporter가 수집한 호스트 지표를 보여줍니다 (CPU, 메모리, 
 
 #### 대시보드 추가하기
 
-애플리케이션·MongoDB·Redis 지표는 Prometheus에 수집되고 있지만 대시보드는
-포함되어 있지 않습니다. 필요한 대시보드는 직접 만들거나
-[Grafana 공식 대시보드](https://grafana.com/grafana/dashboards/)에서 가져와
-`grafana/provisioning/dashboards/`에 JSON으로 두면 10초 안에 반영됩니다.
+애플리케이션·MongoDB·Redis 지표는 Prometheus에 수집됩니다. Redis 역할 분리용
+`redis-role-separation-dashboard.json`은 `role=auth|realtime` 기준으로 두 인스턴스의
+메모리, CPU, 명령 처리율, eviction/expiry, 연결, Pub/Sub 상태를 같은 시간축에 표시합니다.
 
 수집 중인 주요 지표 소스:
 
@@ -119,7 +119,8 @@ node-exporter가 수집한 호스트 지표를 보여줍니다 (CPU, 메모리, 
 |------|-----------|----------|
 | Spring Boot | `/actuator/prometheus` | HTTP 요청/응답시간, JVM heap, GC, Socket.IO 이벤트 |
 | mongodb-exporter | `:9216/metrics` | 연결 수, 작업 속도, 메모리 |
-| redis-exporter | `:9121/metrics` | 명령어 속도, 키 수, 캐시 히트율 |
+| redis-exporter (auth) | `:9121/metrics` | 세션·레이트리밋 Redis 명령, 메모리, 연결 |
+| redis-exporter (realtime) | `:9122/metrics` | 캐시·Pub/Sub Redis 명령, 메모리, 연결 |
 | node-exporter | `:9100/metrics` | CPU, 메모리, 디스크, 네트워크 |
 
 ## 배포 시 주의사항

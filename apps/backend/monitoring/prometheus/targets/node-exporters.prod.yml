@@ -23,14 +23,25 @@
     cluster: 'database'
     service: 'mongodb'
 
-# Redis Cluster
+# Auth Redis
 - targets:
-    - 'IP:9100'  # your-redis-server
+    - 'AUTH_REDIS_IP:9100'
   labels:
     environment: 'production'
     region: 'ap-northeast-2'
-    cluster: 'cache'
-    service: 'redis'
+    cluster: 'redis'
+    service: 'redis-auth'
+    role: 'auth'
+
+# Realtime Redis
+- targets:
+    - 'REALTIME_REDIS_IP:9100'
+  labels:
+    environment: 'production'
+    region: 'ap-northeast-2'
+    cluster: 'redis'
+    service: 'redis-realtime'
+    role: 'realtime'
 
 # Monitoring Server
 - targets:

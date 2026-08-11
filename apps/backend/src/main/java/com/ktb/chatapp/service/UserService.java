@@ -5,6 +5,8 @@ import com.ktb.chatapp.dto.UpdateProfileRequest;
 import com.ktb.chatapp.dto.UserResponse;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.cache.CachedUserProfile;
+import com.ktb.chatapp.service.cache.UserProfileCache;
 import com.ktb.chatapp.storage.StoragePort;
 import com.ktb.chatapp.util.FileUtil;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final FileService fileService;
     private final StoragePort storagePort;
+    private final UserProfileCache userProfileCache;
 
     @Value("${app.profile.image.max-size:5242880}") // 5MB
     private long maxProfileImageSize;
@@ -57,6 +61,7 @@ public class UserService {
         user.setUpdatedAt(LocalDateTime.now());
 
         User updatedUser = userRepository.save(user);
+        userProfileCache.put(updatedUser);
         log.info("사용자 프로필 업데이트 완료 - ID: {}, Name: {}", user.getId(), request.getName());
 
         return UserResponse.from(updatedUser);
@@ -86,6 +91,7 @@ public class UserService {
         user.setProfileImage(profileImageKey);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        userProfileCache.put(user);
 
         log.info("프로필 이미지 업로드 완료 - User ID: {}, Key: {}", user.getId(), profileImageKey);
 
@@ -96,9 +102,14 @@ public class UserService {
      * 특정 사용자 프로필 조회
      */
     public UserResponse getUserProfile(String userId) {
+        Optional<CachedUserProfile> cachedProfile = userProfileCache.get(userId);
+        if (cachedProfile.isPresent()) {
+            return cachedProfile.get().toResponse();
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
 
+        userProfileCache.put(user);
         return UserResponse.from(user);
     }
 
@@ -160,6 +171,7 @@ public class UserService {
             user.setProfileImage("");
             user.setUpdatedAt(LocalDateTime.now());
             userRepository.save(user);
+            userProfileCache.put(user);
             log.info("프로필 이미지 삭제 완료 - User ID: {}", user.getId());
         }
     }
@@ -177,6 +189,7 @@ public class UserService {
         }
 
         userRepository.delete(user);
+        userProfileCache.evict(user.getId());
         log.info("회원 탈퇴 완료 - User ID: {}", user.getId());
     }
 }

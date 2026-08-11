@@ -114,8 +114,20 @@ tail -f logs/app.log
 
    # 데이터베이스
    MONGO_URI=mongodb://localhost:27017/bootcamp-chat
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
+   # Redis A: 로그인 세션 + 레이트리밋
+   AUTH_REDIS_HOST=redis-auth-private-dns
+   AUTH_REDIS_PORT=6379
+   AUTH_REDIS_PASSWORD=secret-from-host-environment
+
+   # Redis B: 프로필 캐시 + Socket.IO store/pub-sub
+   REALTIME_REDIS_HOST=redis-realtime-private-dns
+   REALTIME_REDIS_PORT=6379
+   REALTIME_REDIS_PASSWORD=secret-from-host-environment
+
+   SESSION_STORE=redis
+   RATE_LIMIT_STORE=redis
+   SOCKETIO_STORE=redis
+   USER_PROFILE_CACHE_ENABLED=true
 
    # 서버 포트
    PORT=5001
@@ -125,14 +137,20 @@ tail -f logs/app.log
    OPENAI_API_KEY=sk-...
    ```
 
-3. **MongoDB 및 Redis 실행 확인**
+3. **MongoDB 및 두 Redis 연결 확인**
    ```bash
    # MongoDB 상태 확인
    systemctl status mongodb
 
-   # Redis 상태 확인
+   # 각 Redis 호스트에서 서비스 상태 확인
    systemctl status redis
    ```
+
+   모든 백엔드는 동일한 Redis A와 동일한 Redis B endpoint를 사용해야 합니다. 첫 배포는 두
+   역할을 기존 Redis로 지정해 단일 Redis 호환성을 먼저 확인하고, Redis B 전환은 일부 노드만
+   먼저 바꾸지 말고 blue-green 방식으로 수행합니다. 혼합 endpoint 구간에는 노드 간 Socket.IO
+   Pub/Sub 이벤트가 끊깁니다. 롤백할 때도 모든 백엔드의 realtime endpoint를 함께 Redis A로
+   되돌립니다.
 
 ### Docker 런타임
 

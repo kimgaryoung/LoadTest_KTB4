@@ -27,7 +27,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "messages")
-@CompoundIndex(name = "room_timestamp_desc_idx", def = "{'room': 1, 'timestamp': -1}")
+@CompoundIndex(name = "idx_messages_room_timestamp_desc", def = "{'room': 1, 'timestamp': -1}")
 @CompoundIndex(name = "file_idx", def = "{'file': 1}")
 public class Message {
 

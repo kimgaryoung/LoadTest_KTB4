@@ -26,11 +26,19 @@ scrape_configs:
         labels:
           environment: 'dev'
 
-  - job_name: 'redis'
+  - job_name: 'redis-auth'
     static_configs:
       - targets: ['redis-exporter:9121']
         labels:
           environment: 'dev'
+          role: 'auth'
+
+  - job_name: 'redis-realtime'
+    static_configs:
+      - targets: ['redis-realtime-exporter:9121']
+        labels:
+          environment: 'dev'
+          role: 'realtime'
 
   - job_name: 'cadvisor'
     static_configs:

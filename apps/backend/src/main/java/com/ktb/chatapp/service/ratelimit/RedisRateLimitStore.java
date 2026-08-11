@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -22,7 +23,7 @@ public class RedisRateLimitStore {
 
     private final StringRedisTemplate redisTemplate;
 
-    public RedisRateLimitStore(StringRedisTemplate redisTemplate) {
+    public RedisRateLimitStore(@Qualifier("authRedisTemplate") StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
