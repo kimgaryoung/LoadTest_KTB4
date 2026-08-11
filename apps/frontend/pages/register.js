@@ -54,10 +54,11 @@ const Register = () => {
       
       setSuccess(true);
       setLoading(false);
-      
-      setTimeout(() => {
-        router.push('/login');
-      }, 1000);
+
+      // Do not leave a delayed navigation behind. It can race with the next
+      // navigation after a successful registration and abort that request.
+      // The root page is the canonical login screen.
+      await router.push('/');
     } catch (err) {
       setError(err.message || '회원가입 처리 중 오류가 발생했습니다.');
       setLoading(false);

@@ -1,17 +1,10 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-const LoginRedirectPage = () => {
-  const router = useRouter();
-
-  useEffect(() => {
-    const queryString = window.location.search;
-    router.replace(queryString ? `/${queryString}` : '/');
-  }, [router]);
-
-  return null;
-};
-
-export default LoginRedirectPage;
+/**
+ * Keep the legacy /login URL, but redirect before a client page is hydrated.
+ * A useEffect redirect cancels an in-flight document navigation, which makes
+ * direct clients (including Chromium E2E) intermittently receive ERR_ABORTED.
+ */
+export default function LoginRedirectPage() {
+  redirect('/');
+}
