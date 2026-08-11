@@ -19,6 +19,8 @@ const ChatRoomView = ({ roomId, onNavigate, onReplace, asPath }) => {
   const {
     room,
     messages,
+    messageIds,
+    messagesById,
     connected,
     connectionStatus,
     messageLoadError,
@@ -30,6 +32,7 @@ const ChatRoomView = ({ roomId, onNavigate, onReplace, asPath }) => {
     error,
     handleReactionAdd,
     handleReactionRemove,
+    handleVisibleMessagesRead,
     loadingMessages,
     hasMoreMessages,
     handleLoadMore,
@@ -134,10 +137,13 @@ const ChatRoomView = ({ roomId, onNavigate, onReplace, asPath }) => {
     return (
       <ChatMessages
         messages={messages}
+        messageIds={messageIds}
+        messagesById={messagesById}
         currentUser={currentUser}
         room={room}
         onReactionAdd={handleReactionAdd}
         onReactionRemove={handleReactionRemove}
+        onVisibleMessagesRead={handleVisibleMessagesRead}
         loadingMessages={loadingMessages}
         hasMoreMessages={hasMoreMessages}
         onLoadMore={handleLoadMore}
