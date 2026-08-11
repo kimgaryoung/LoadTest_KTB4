@@ -71,12 +71,10 @@ class MessageReadHandlerTest {
         MarkAsReadRequest request = request("message-1");
         Message message = Message.builder().id("message-1").roomId("room-1").build();
         Room room = Room.builder().id("room-1").participantIds(Set.of("user-1")).build();
-        User user = User.builder().id("user-1").name("tester").email("tester@example.com").build();
 
         when(client.get("user"))
                 .thenReturn(new SocketUser("user-1", "tester", "session-1", "socket-1"));
         when(messageRepository.findById("message-1")).thenReturn(Optional.of(message));
-        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
         when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
         when(socketIOServer.getRoomOperations("room-1")).thenReturn(roomOperations);
 

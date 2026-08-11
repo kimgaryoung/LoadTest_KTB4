@@ -13,11 +13,11 @@ vi.mock('@/services/axios', () => ({
 
 const roomsResponse = (rooms) => ({ data: { data: rooms } });
 
-const renderRoomList = () =>
+const renderRoomList = ({ router = { push: vi.fn() } } = {}) =>
   renderHook(() =>
     useRoomList({
       currentUser: { token: 'token-1' },
-      router: { push: vi.fn() },
+      router,
       connectionStatus: CONNECTION_STATUS.CONNECTED,
       setConnectionStatus: vi.fn(),
       retryCount: 0,
@@ -101,5 +101,18 @@ describe('useRoomList', () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.rooms).toEqual([{ _id: 'room-1' }]);
+  });
+
+  it('starts room navigation immediately after the join API succeeds', async () => {
+    const router = { prefetch: vi.fn(), push: vi.fn(), replace: vi.fn() };
+    axiosInstance.post.mockResolvedValue({ data: { success: true } });
+    const { result } = renderRoomList({ router });
+
+    await act(async () => {
+      await result.current.handleJoinRoom('room-1');
+    });
+
+    expect(router.prefetch).toHaveBeenCalledWith('/chat/room-1');
+    expect(router.push).toHaveBeenCalledWith('/chat/room-1');
   });
 });

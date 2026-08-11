@@ -2,6 +2,7 @@ package com.ktb.chatapp.service;
 
 import com.ktb.chatapp.model.RateLimit;
 import com.ktb.chatapp.service.ratelimit.RateLimitStore;
+import com.ktb.chatapp.service.ratelimit.RedisRateLimitStore;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import static java.net.InetAddress.*;
@@ -19,6 +21,12 @@ import static java.net.InetAddress.*;
 public class RateLimitService {
 
     private final RateLimitStore rateLimitStore;
+    private volatile RedisRateLimitStore redisRateLimitStore;
+
+    @Autowired(required = false)
+    void setRedisRateLimitStore(RedisRateLimitStore redisRateLimitStore) {
+        this.redisRateLimitStore = redisRateLimitStore;
+    }
     @Value("${HOSTNAME:''}")
     private String hostName;
     
@@ -41,6 +49,10 @@ public class RateLimitService {
     
     @Transactional
     public RateLimitCheckResult checkRateLimit(String _clientId, int maxRequests, Duration window) {
+        RedisRateLimitStore redisStore = redisRateLimitStore;
+        if (redisStore != null) {
+            return redisStore.check(_clientId, maxRequests, window);
+        }
         String actualClientId = hostName + ":" + _clientId;
         Duration effectiveWindow = window != null ? window : Duration.ofSeconds(1);
         long windowSeconds = Math.max(1L, effectiveWindow.getSeconds());

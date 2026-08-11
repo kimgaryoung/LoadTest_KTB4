@@ -57,17 +57,16 @@ class ConnectionLoginHandlerTest {
     }
 
     @Test
-    void onDisconnect_removesCurrentConnectionAndLeavesRooms() {
+    void onDisconnect_removesCurrentConnectionWithoutPersistingRoomLeave() {
         UUID socketId = UUID.randomUUID();
         SocketUser user = new SocketUser("user-1", "tester", "session-1", socketId.toString());
         when(client.get("user")).thenReturn(user);
-        when(userRooms.get(user.id())).thenReturn(Set.of("room-1"));
         when(client.getSessionId()).thenReturn(socketId);
         when(connectedUsers.get(user.id())).thenReturn(user);
 
         handler.onDisconnect(client);
 
-        verify(roomLeaveHandler).handleLeaveRoom(client, "room-1");
+        org.mockito.Mockito.verifyNoInteractions(roomLeaveHandler);
         verify(connectedUsers).del(user.id());
         verify(client).leaveRooms(Set.of("user:" + user.id(), "room-list"));
         verify(client).del("user");

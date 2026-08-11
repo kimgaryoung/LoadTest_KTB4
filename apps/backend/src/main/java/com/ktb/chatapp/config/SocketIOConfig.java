@@ -7,13 +7,17 @@ import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import com.corundumstudio.socketio.namespace.Namespace;
 import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
 import com.corundumstudio.socketio.store.MemoryStoreFactory;
+import com.corundumstudio.socketio.store.RedissonStoreFactory;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ktb.chatapp.websocket.socketio.ChatDataStore;
 import com.ktb.chatapp.websocket.socketio.LocalChatDataStore;
+import com.ktb.chatapp.websocket.socketio.RedisChatDataStore;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -37,18 +41,24 @@ public class SocketIOConfig {
     @Value("${socketio.server.origin:*}")
     private String origin;
 
+    @Value("${socketio.store:memory}")
+    private String storeType;
+
     @Bean(initMethod = "start", destroyMethod = "stop")
-    public SocketIOServer socketIOServer(AuthTokenListener authTokenListener, MeterRegistry meterRegistry) {
+    public SocketIOServer socketIOServer(
+            AuthTokenListener authTokenListener,
+            MeterRegistry meterRegistry,
+            ObjectProvider<RedissonClient> redissonClientProvider) {
         com.corundumstudio.socketio.Configuration config = new com.corundumstudio.socketio.Configuration();
         config.setHostname(host);
         config.setPort(port);
         
         var socketConfig = new SocketConfig();
         socketConfig.setReuseAddress(true);
-        socketConfig.setTcpNoDelay(false);
-        socketConfig.setAcceptBackLog(10);
-        socketConfig.setTcpSendBufferSize(4096);
-        socketConfig.setTcpReceiveBufferSize(4096);
+        socketConfig.setTcpNoDelay(true);
+        socketConfig.setAcceptBackLog(512);
+        socketConfig.setTcpSendBufferSize(65536);
+        socketConfig.setTcpReceiveBufferSize(65536);
         config.setSocketConfig(socketConfig);
 
         config.setOrigin(origin);
@@ -59,7 +69,16 @@ public class SocketIOConfig {
         config.setUpgradeTimeout(10000);
 
         config.setJsonSupport(new JacksonJsonSupport(new JavaTimeModule()));
-        config.setStoreFactory(new MemoryStoreFactory()); // 단일노드 전용
+        RedissonClient redissonClient = redissonClientProvider.getIfAvailable();
+        if ("redis".equalsIgnoreCase(storeType) && redissonClient != null) {
+            config.setStoreFactory(new RedissonStoreFactory(redissonClient));
+            log.info("Socket.IO shared Redisson store enabled");
+        } else {
+            config.setStoreFactory(new MemoryStoreFactory());
+            if ("redis".equalsIgnoreCase(storeType)) {
+                log.warn("socketio.store=redis but no RedissonClient is available; using memory store");
+            }
+        }
 
         log.info("Socket.IO server configured on {}:{} with {} boss threads and {} worker threads",
                  host, port, config.getBossThreads(), config.getWorkerThreads());
@@ -92,7 +111,15 @@ public class SocketIOConfig {
     // 인메모리 저장소, 단일 노드 환경에서만 사용
     @Bean
     @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(name = "socketio.store", havingValue = "memory", matchIfMissing = true)
     public ChatDataStore chatDataStore() {
         return new LocalChatDataStore();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(name = "socketio.store", havingValue = "redis")
+    public ChatDataStore redisChatDataStore(RedissonClient redissonClient) {
+        return new RedisChatDataStore(redissonClient);
     }
 }

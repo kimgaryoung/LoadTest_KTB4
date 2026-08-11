@@ -103,11 +103,8 @@ public class RoomJoinHandler {
             }
 
             // 참가자 정보 조회
-            List<UserResponse> participants = roomOpt.get().getParticipantIds()
+            List<UserResponse> participants = userRepository.findAllById(roomOpt.get().getParticipantIds())
                     .stream()
-                    .map(userRepository::findById)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
                     .map(UserResponse::from)
                     .toList();
             

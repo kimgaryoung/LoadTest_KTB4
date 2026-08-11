@@ -114,12 +114,8 @@ public class RoomLeaveHandler {
             return;
         }
         
-        var participantList = roomOpt.get()
-                .getParticipantIds()
+        var participantList = userRepository.findAllById(roomOpt.get().getParticipantIds())
                 .stream()
-                .map(userRepository::findById)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(UserResponse::from)
                 .toList();
         

@@ -65,10 +65,14 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // CorsConfigurationSource is consulted for every matching request.  Build the immutable
+        // configuration once during startup so CSV parsing and (especially) warning logging are
+        // never on the request hot path.
+        CorsConfiguration corsConfiguration = createCorsConfiguration();
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(request -> createCorsConfiguration()))
+                .cors(cors -> cors.configurationSource(request -> corsConfiguration))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/health",

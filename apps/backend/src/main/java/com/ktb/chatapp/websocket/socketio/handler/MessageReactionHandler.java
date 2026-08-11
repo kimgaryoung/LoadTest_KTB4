@@ -6,8 +6,11 @@ import com.corundumstudio.socketio.annotation.OnEvent;
 import com.ktb.chatapp.dto.MessageReactionRequest;
 import com.ktb.chatapp.dto.MessageReactionResponse;
 import com.ktb.chatapp.model.Message;
-import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +30,7 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 public class MessageReactionHandler {
     
     private final SocketIOServer socketIOServer;
-    private final MessageRepository messageRepository;
+    private final MongoTemplate mongoTemplate;
     
     @OnEvent(MESSAGE_REACTION)
     public void handleMessageReaction(SocketIOClient client, MessageReactionRequest data) {
@@ -38,25 +41,36 @@ public class MessageReactionHandler {
                 return;
             }
 
-            Message message = messageRepository.findById(data.getMessageId()).orElse(null);
-            if (message == null) {
-                client.sendEvent(ERROR, Map.of("message", "메시지를 찾을 수 없습니다."));
+            if (data.getReaction() == null || data.getReaction().isBlank()
+                    || data.getReaction().contains(".") || data.getReaction().contains("$")) {
+                client.sendEvent(ERROR, Map.of("message", "유효하지 않은 리액션입니다."));
                 return;
             }
 
+            Update update;
             switch (data.getType()) {
-                case "add" -> message.addReaction(data.getReaction(), userId);
-                case "remove" -> message.removeReaction(data.getReaction(), userId);
+                case "add" -> update = new Update().addToSet(
+                        "reactions." + data.getReaction(), userId);
+                case "remove" -> update = new Update().pull(
+                        "reactions." + data.getReaction(), userId);
                 case null, default -> {
                     client.sendEvent(ERROR, Map.of("message", "지원하지 않는 리액션 타입입니다."));
                     return;
                 }
             }
 
+            Message message = mongoTemplate.findAndModify(
+                    Query.query(Criteria.where("_id").is(data.getMessageId())),
+                    update,
+                    org.springframework.data.mongodb.core.FindAndModifyOptions.options().returnNew(true),
+                    Message.class);
+            if (message == null) {
+                client.sendEvent(ERROR, Map.of("message", "메시지를 찾을 수 없습니다."));
+                return;
+            }
+
             log.debug("Message reaction processed - type: {}, reaction: {}, messageId: {}, userId: {}",
                 data.getType(), data.getReaction(), message.getId(), userId);
-
-            messageRepository.save(message);
 
             MessageReactionResponse response = new MessageReactionResponse(
                 message.getId(),

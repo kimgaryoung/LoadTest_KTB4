@@ -40,7 +40,7 @@ class RoomActivityNotifierTest {
     }
 
     @Test
-    void notifyMessageStored_everyMessage_publishes() {
+    void notifyMessageStored_coalescesBurstForSameRoom() {
         when(recentMessageCounter.countRecentMessages("room-1")).thenReturn(1);
         RoomActivityNotifier notifier = notifier();
 
@@ -48,8 +48,8 @@ class RoomActivityNotifierTest {
         notifier.notifyMessageStored("room-1");
         notifier.notifyMessageStored("room-1");
 
-        verify(eventPublisher, times(3)).publishEvent(any(RoomActivityEvent.class));
-        verify(recentMessageCounter, times(3)).countRecentMessages("room-1");
+        verify(eventPublisher, times(1)).publishEvent(any(RoomActivityEvent.class));
+        verify(recentMessageCounter, times(1)).countRecentMessages("room-1");
     }
 
     @Test
