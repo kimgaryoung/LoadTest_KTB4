@@ -1,12 +1,19 @@
 package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.dto.StandardResponse;
+import com.ktb.chatapp.dto.CompleteUploadRequest;
+import com.ktb.chatapp.dto.PresignUploadRequest;
+import com.ktb.chatapp.dto.PresignUploadResponse;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.FileAccess;
 import com.ktb.chatapp.service.FileAccessService;
 import com.ktb.chatapp.service.FileService;
 import com.ktb.chatapp.service.FileUploadResult;
+import com.ktb.chatapp.service.DirectFileUploadService;
+import com.ktb.chatapp.service.DirectUploadUnavailableException;
+import com.ktb.chatapp.service.UploadIntentService;
+import com.ktb.chatapp.model.UploadPurpose;
 import com.ktb.chatapp.service.PreviewNotSupportedException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -41,6 +48,8 @@ public class FileController {
     private final FileService fileService;
     private final FileAccessService fileAccessService;
     private final UserRepository userRepository;
+    private final UploadIntentService uploadIntentService;
+    private final DirectFileUploadService directFileUploadService;
 
     /**
      * 파일 업로드
@@ -57,7 +66,7 @@ public class FileController {
         @ApiResponse(responseCode = "500", description = "서버 내부 오류",
             content = @Content(schema = @Schema(implementation = StandardResponse.class)))
     })
-    @PostMapping("/upload")
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadFile(
             @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
             Principal principal) {
@@ -98,6 +107,78 @@ public class FileController {
             errorResponse.put("error", e.getMessage());
             return ResponseEntity.status(500).body(errorResponse);
         }
+    }
+
+    @PostMapping("/presign")
+    public ResponseEntity<?> prepareDirectUpload(
+            @RequestBody PresignUploadRequest request,
+            Principal principal) {
+        try {
+            User user = currentUser(principal);
+            PresignUploadResponse response = uploadIntentService.prepare(
+                    user.getId(), UploadPurpose.CHAT, request);
+            return ResponseEntity.ok(response);
+        } catch (DirectUploadUnavailableException e) {
+            return directUploadUnavailable();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("파일 direct upload 준비 중 에러 발생", e);
+            return ResponseEntity.internalServerError()
+                    .body(StandardResponse.error("파일 업로드 준비 중 오류가 발생했습니다."));
+        }
+    }
+
+    @PostMapping(value = "/upload", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> completeDirectUpload(
+            @RequestBody CompleteUploadRequest request,
+            Principal principal) {
+        try {
+            User user = currentUser(principal);
+            FileUploadResult result = FileUploadResult.builder()
+                    .success(true)
+                    .file(directFileUploadService.complete(request.uploadIntentId(), user.getId()))
+                    .build();
+            return uploadSuccessResponse(result);
+        } catch (DirectUploadUnavailableException e) {
+            return directUploadUnavailable();
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("파일 direct upload 완료 중 에러 발생", e);
+            return ResponseEntity.internalServerError()
+                    .body(StandardResponse.error("파일 업로드 완료 중 오류가 발생했습니다."));
+        }
+    }
+
+    private User currentUser(Principal principal) {
+        return userRepository.findByEmail(principal.getName())
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        "User not found: " + principal.getName()));
+    }
+
+    private ResponseEntity<?> directUploadUnavailable() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("code", "DIRECT_UPLOAD_UNAVAILABLE");
+        response.put("message", "직접 업로드가 비활성화되어 있습니다.");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    private ResponseEntity<?> uploadSuccessResponse(FileUploadResult result) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "파일 업로드 성공");
+
+        Map<String, Object> fileData = new HashMap<>();
+        fileData.put("_id", result.getFile().getId());
+        fileData.put("filename", result.getFile().getFilename());
+        fileData.put("originalname", result.getFile().getOriginalname());
+        fileData.put("mimetype", result.getFile().getMimetype());
+        fileData.put("size", result.getFile().getSize());
+        fileData.put("uploadDate", result.getFile().getUploadDate());
+        response.put("file", fileData);
+        return ResponseEntity.ok(response);
     }
 
     /**

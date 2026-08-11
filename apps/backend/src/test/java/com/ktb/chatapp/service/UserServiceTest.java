@@ -23,6 +23,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -44,6 +45,9 @@ class UserServiceTest {
     @Mock
     private UserProfileCache userProfileCache;
 
+    @Mock
+    private UploadIntentService uploadIntentService;
+
     private UserService userService;
 
     @TempDir
@@ -56,7 +60,11 @@ class UserServiceTest {
     @BeforeEach
     void setUp() {
         userService = new UserService(
-                userRepository, fileService, new LocalStorage(uploadDir.toString()), userProfileCache);
+                userRepository,
+                fileService,
+                new LocalStorage(uploadDir.toString()),
+                userProfileCache,
+                uploadIntentService);
         ReflectionTestUtils.setField(userService, "maxProfileImageSize", 5242880L);
     }
 
@@ -87,6 +95,26 @@ class UserServiceTest {
         assertThat(Files.exists(oldFile)).isFalse();
         assertThat(user.getProfileImage()).isEqualTo("profiles/new.jpg");
         assertThat(response.getImageUrl()).isEqualTo("/api/files/profiles/new.jpg");
+    }
+
+    @Test
+    @DisplayName("프로필 DB 갱신 실패 시 기존 이미지 실물을 보존한다")
+    void uploadProfileImage_DbFailurePreservesOldImage() throws IOException {
+        Path oldFile = createOldProfileImageFile("preserved.jpg");
+        User user = User.builder()
+                .id("user-1")
+                .email(EMAIL)
+                .profileImage("profiles/preserved.jpg")
+                .build();
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(fileService.storeFile(any(), eq("profiles"))).thenReturn("profiles/new.jpg");
+        when(userRepository.save(user)).thenThrow(new RuntimeException("mongo unavailable"));
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "new.jpg", "image/jpeg", "new-image-bytes".getBytes());
+
+        assertThatThrownBy(() -> userService.uploadProfileImage(EMAIL, file))
+                .hasMessage("mongo unavailable");
+        assertThat(Files.exists(oldFile)).isTrue();
     }
 
     @Test

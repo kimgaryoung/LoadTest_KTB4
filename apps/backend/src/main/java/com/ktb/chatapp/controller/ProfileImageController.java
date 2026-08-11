@@ -14,6 +14,10 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
+import java.time.Duration;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +35,9 @@ public class ProfileImageController {
 
     private final StoragePort storagePort;
 
+    @Value("${file.presign.get-ttl:5m}")
+    private Duration presignTtl;
+
     @Operation(summary = "프로필 이미지 조회", description = "프로필 이미지를 반환합니다. 인증이 필요하지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "이미지 조회 성공"),
@@ -39,14 +46,25 @@ public class ProfileImageController {
     })
     @SecurityRequirement(name = "")
     @GetMapping("/{filename:.+}")
-    public ResponseEntity<Resource> getProfileImage(
+    public ResponseEntity<?> getProfileImage(
             @Parameter(description = "조회할 프로필 이미지 파일명") @PathVariable String filename) {
 
         if (FileUtil.containsPathTraversal(filename)) {
             return ResponseEntity.badRequest().build();
         }
 
-        return storagePort.open(StorageKey.profile(filename))
+        String key = StorageKey.profile(filename);
+        var offloadUrl = storagePort.offloadUrl(
+                key,
+                presignTtl,
+                ContentDisposition.inline().filename(filename).build());
+        if (offloadUrl.isPresent()) {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(offloadUrl.get())
+                    .build();
+        }
+
+        return storagePort.open(key)
                 .map(resource -> ResponseEntity.ok()
                         .contentType(contentTypeOf(filename))
                         .body(resource))

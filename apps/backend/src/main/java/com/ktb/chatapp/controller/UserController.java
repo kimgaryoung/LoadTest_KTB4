@@ -2,9 +2,13 @@ package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.dto.StandardResponse;
 import com.ktb.chatapp.dto.ProfileImageResponse;
+import com.ktb.chatapp.dto.CompleteUploadRequest;
+import com.ktb.chatapp.dto.PresignUploadRequest;
+import com.ktb.chatapp.dto.PresignUploadResponse;
 import com.ktb.chatapp.dto.UpdateProfileRequest;
 import com.ktb.chatapp.dto.UserResponse;
 import com.ktb.chatapp.service.UserService;
+import com.ktb.chatapp.service.DirectUploadUnavailableException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -16,6 +20,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -120,7 +126,7 @@ public class UserController {
         @ApiResponse(responseCode = "500", description = "서버 내부 오류",
             content = @Content(schema = @Schema(implementation = StandardResponse.class)))
     })
-    @PostMapping("/profile-image")
+    @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadProfileImage(
             Principal principal,
             @RequestParam("profileImage") MultipartFile file) {
@@ -137,6 +143,45 @@ public class UserController {
         } catch (Exception e) {
             log.error("프로필 이미지 업로드 중 오류 발생: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().body(StandardResponse.error("이미지 업로드 중 오류가 발생했습니다."));
+        }
+    }
+
+    @PostMapping("/presign-profile-image")
+    public ResponseEntity<?> prepareProfileImageUpload(
+            Principal principal,
+            @RequestBody PresignUploadRequest request) {
+        try {
+            PresignUploadResponse response = userService.prepareProfileImageUpload(
+                    principal.getName(), request);
+            return ResponseEntity.ok(response);
+        } catch (DirectUploadUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(StandardResponse.error("직접 업로드가 비활성화되어 있습니다."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("프로필 이미지 direct upload 준비 실패", e);
+            return ResponseEntity.internalServerError()
+                    .body(StandardResponse.error("이미지 업로드 준비 중 오류가 발생했습니다."));
+        }
+    }
+
+    @PostMapping(value = "/profile-image", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> completeProfileImageUpload(
+            Principal principal,
+            @RequestBody CompleteUploadRequest request) {
+        try {
+            return ResponseEntity.ok(userService.completeProfileImageUpload(
+                    principal.getName(), request.uploadIntentId()));
+        } catch (DirectUploadUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(StandardResponse.error("직접 업로드가 비활성화되어 있습니다."));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("프로필 이미지 direct upload 완료 실패", e);
+            return ResponseEntity.internalServerError()
+                    .body(StandardResponse.error("이미지 업로드 완료 중 오류가 발생했습니다."));
         }
     }
 

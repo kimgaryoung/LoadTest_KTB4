@@ -51,6 +51,7 @@ class ChatMessageHandlerTest {
     @Mock private SessionService sessionService;
     @Mock private BannedWordChecker bannedWordChecker;
     @Mock private RateLimitService rateLimitService;
+    @Mock private com.ktb.chatapp.service.DirectFileUploadService directFileUploadService;
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private ChatMessageHandler handler;
@@ -68,7 +69,8 @@ class ChatMessageHandlerTest {
                         sessionService,
                         bannedWordChecker,
                         rateLimitService,
-                        meterRegistry);
+                        meterRegistry,
+                        directFileUploadService);
     }
 
     @Test

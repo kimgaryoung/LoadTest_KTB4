@@ -99,6 +99,15 @@ make verify-java
 | `RATE_LIMIT_STORE` | ❌ | `redis` | Socket.IO 레이트리밋 저장소 |
 | `SOCKETIO_STORE` | ❌ | `redis` | `redis`는 멀티 노드 공유 store, `memory`는 단일 노드 전용 |
 | `USER_PROFILE_CACHE_ENABLED` | ❌ | `true` | 공개 프로필 Redis 캐시 활성화 |
+| `FILE_STORAGE_TYPE` | ❌ | `local` | `local` 또는 private `s3` 저장소 선택 |
+| `FILE_DIRECT_UPLOAD_ENABLED` | ❌ | `false` | 브라우저 presigned PUT 준비/완료 API 활성화 |
+| `FILE_PRESIGN_PUT_TTL` | ❌ | `10m` | presigned PUT URL 수명 |
+| `FILE_PRESIGN_GET_TTL` | ❌ | `5m` | presigned GET URL 수명 |
+| `FILE_PENDING_RETENTION` | ❌ | `24h` | 완료 후 채팅 메시지에 연결되지 않은 파일 보존 시간 |
+| `S3_BUCKET` | S3 사용 시 ✅ | 없음 | private S3 bucket 이름 |
+| `AWS_REGION` | S3 사용 시 ✅ | `ap-northeast-2` | S3 region |
+| `S3_ENDPOINT` | ❌ | 없음 | LocalStack 등 테스트 endpoint override |
+| `S3_PATH_STYLE_ACCESS` | ❌ | `false` | 테스트 endpoint의 path-style 접근 여부 |
 | `PORT` | ❌ | `5001` | HTTP API 포트 (`server.port`) |
 | `WS_PORT` | ❌ | `5002` | Socket.IO 서버 포트             |
 | `CORS_ALLOWED_ORIGINS` | ❌ | `*` | REST API CORS 허용 Origin 목록. 쉼표로 구분 |
@@ -108,6 +117,12 @@ make verify-java
 | `OPENAI_API_KEY` | ❌ | `your_openai_api_key_here` | OpenAI 호출용 API Key          |
 
 `.env.template` 파일을 복사해 기본 값을 채운 뒤 필요에 따라 수정하세요.
+
+### S3 direct upload
+
+백엔드는 `FILE_STORAGE_TYPE=s3`일 때 private S3를 사용하며, credential은 AWS SDK default credential provider chain에서 읽습니다. 실제 access key를 `.env`나 저장소에 기록하지 마세요. 프런트의 `NEXT_PUBLIC_FILE_DIRECT_UPLOAD_ENABLED=true`도 함께 설정해야 브라우저가 S3로 직접 PUT합니다.
+
+S3 bucket CORS에는 실제 프런트 origin, `PUT/GET/HEAD`, 서명 응답에 포함되는 `Content-Type`, checksum 및 `x-amz-meta-*` header를 허용해야 합니다. 채팅 조회는 기존 방 참가자 인가 뒤 presigned GET을 발급하고, 프로필은 기존 공개 API URL에서 presigned GET으로 redirect합니다.
 
 예시:
 ```bash

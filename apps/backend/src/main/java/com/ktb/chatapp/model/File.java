@@ -37,6 +37,11 @@ public class File {
 
     private String path;
 
+    @Indexed(unique = true, sparse = true)
+    private String uploadIntentId;
+
+    private FileUploadStatus uploadStatus;
+
     @Field("user")
     private String user;
 

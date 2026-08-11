@@ -38,7 +38,6 @@ vi.mock('../useChatRoom', () => ({
     error: null,
     handleReactionAdd: vi.fn(),
     handleReactionRemove: vi.fn(),
-    handleVisibleMessagesRead: vi.fn(),
     loadingMessages: false,
     hasMoreMessages: false,
     handleLoadMore: vi.fn(),

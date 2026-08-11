@@ -132,7 +132,6 @@ describe('useChatRoom', () => {
         handleMessageSubmit: expect.any(Function),
         handleReactionAdd: expect.any(Function),
         handleReactionRemove: expect.any(Function),
-        handleVisibleMessagesRead: expect.any(Function),
         handleLoadMore: expect.any(Function),
         retryMessageLoad: expect.any(Function),
       })

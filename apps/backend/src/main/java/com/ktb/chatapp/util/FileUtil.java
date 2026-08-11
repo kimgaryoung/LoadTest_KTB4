@@ -87,6 +87,31 @@ public class FileUtil {
         }
     }
 
+    /** Direct upload requests carry metadata before the object exists in S3. */
+    public static void validateFileMetadata(String originalFilename, String contentType, long size) {
+        if (originalFilename == null || originalFilename.trim().isEmpty()) {
+            throw new IllegalArgumentException("파일명이 올바르지 않습니다.");
+        }
+        if (originalFilename.getBytes(StandardCharsets.UTF_8).length > 255) {
+            throw new IllegalArgumentException("파일명이 너무 깁니다.");
+        }
+        if (contentType == null || !ALLOWED_TYPES.containsKey(contentType)) {
+            throw new IllegalArgumentException("지원하지 않는 파일 형식입니다.");
+        }
+        String extension = getFileExtension(originalFilename).toLowerCase();
+        if (!ALLOWED_TYPES.get(contentType).contains(extension)) {
+            throw new IllegalArgumentException(getFileType(contentType) + " 확장자가 올바르지 않습니다.");
+        }
+        if (size <= 0) {
+            throw new IllegalArgumentException("파일이 비어있습니다.");
+        }
+        String type = contentType.split("/")[0];
+        long limit = FILE_SIZE_LIMITS.getOrDefault(type, FILE_SIZE_LIMITS.get("application"));
+        if (size > limit) {
+            throw new IllegalArgumentException(getFileType(contentType) + " 파일은 5MB를 초과할 수 없습니다.");
+        }
+    }
+
     /**
      * 파일 타입 한글명 반환
      */

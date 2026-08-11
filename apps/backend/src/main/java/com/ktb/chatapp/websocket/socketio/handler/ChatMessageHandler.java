@@ -20,6 +20,7 @@ import com.ktb.chatapp.service.SessionService;
 import com.ktb.chatapp.service.SessionValidationResult;
 import com.ktb.chatapp.service.RateLimitService;
 import com.ktb.chatapp.service.RateLimitCheckResult;
+import com.ktb.chatapp.service.DirectFileUploadService;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -51,6 +52,7 @@ public class ChatMessageHandler {
     private final BannedWordChecker bannedWordChecker;
     private final RateLimitService rateLimitService;
     private final MeterRegistry meterRegistry;
+    private final DirectFileUploadService directFileUploadService;
     private volatile ChatBackgroundTasks chatBackgroundTasks;
 
     @Value("${chat.ai.enabled:false}")
@@ -173,6 +175,9 @@ public class ChatMessageHandler {
 
             markSenderAsRead(message, socketUser.id());
             Message savedMessage = messageRepository.save(message);
+            if (savedMessage.getFileId() != null) {
+                directFileUploadService.markBound(savedMessage.getFileId());
+            }
             MessageResponse messageResponse = createMessageResponse(savedMessage, sender);
 
             socketIOServer.getRoomOperations(roomId)

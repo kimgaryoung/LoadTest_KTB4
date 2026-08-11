@@ -23,6 +23,7 @@ NextJS와 Spring Boot 기반 채팅 애플리케이션 모노레포입니다.
 - 이미지 미리보기 기능
 - 안전한 파일 업로드 및 다운로드
 - 파일 크기 제한 (5MB)
+- 선택적 private S3 presigned PUT/GET 오프로딩 (`FILE_STORAGE_TYPE=s3`)
 
 ## 개발 환경 사전 요구사항
 
