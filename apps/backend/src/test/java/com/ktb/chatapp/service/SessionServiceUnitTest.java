@@ -1,5 +1,6 @@
 package com.ktb.chatapp.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.ktb.chatapp.model.Session;
 import com.ktb.chatapp.service.session.SessionStore;
 import com.ktb.chatapp.service.session.SessionTouchResult;
@@ -11,6 +12,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -19,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -123,6 +126,51 @@ class SessionServiceUnitTest {
 
         assertThat(result.isValid()).isFalse();
         assertThat(result.getError()).isEqualTo("VALIDATION_ERROR");
+    }
+
+    @Test
+    @DisplayName("같은 세션의 연속 검증은 1초 캐시로 저장소 접근을 한 번만 수행한다")
+    void validateSession_RepeatedRequest_UsesValidationCache() {
+        long now = Instant.now().toEpochMilli();
+        Session session = Session.builder()
+                .userId(USER_ID)
+                .sessionId(SESSION_ID)
+                .createdAt(now)
+                .lastActivity(now)
+                .expiresAt(Instant.now().plusSeconds(SessionService.SESSION_TTL_SEC))
+                .build();
+        when(sessionStore.validateAndTouch(
+                anyString(), anyString(), anyLong(), anyLong(), anyLong()))
+                .thenReturn(SessionTouchResult.valid(session));
+
+        SessionValidationResult first = sessionService.validateSession(USER_ID, SESSION_ID);
+        SessionValidationResult second = sessionService.validateSession(USER_ID, SESSION_ID);
+
+        assertThat(first.isValid()).isTrue();
+        assertThat(second.isValid()).isTrue();
+        verify(sessionStore, times(1)).validateAndTouch(
+                anyString(), anyString(), anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("세션 검증 캐시는 최대 1만 개로 제한된다")
+    @SuppressWarnings("unchecked")
+    void validationCache_IsBounded() {
+        Cache<String, SessionData> cache =
+                (Cache<String, SessionData>) ReflectionTestUtils.getField(sessionService, "validationCache");
+        SessionData sessionData = SessionData.builder()
+                .userId(USER_ID)
+                .sessionId(SESSION_ID)
+                .createdAt(1L)
+                .lastActivity(1L)
+                .build();
+
+        for (int index = 0; index < 10_100; index++) {
+            cache.put("user-" + index + ":session-" + index, sessionData);
+        }
+        cache.cleanUp();
+
+        assertThat(cache.estimatedSize()).isLessThanOrEqualTo(10_000L);
     }
 
     @Test

@@ -1,11 +1,13 @@
 package com.ktb.chatapp.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.ktb.chatapp.model.Session;
 import com.ktb.chatapp.service.session.SessionStore;
 import com.ktb.chatapp.service.session.SessionTouchResult;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.convert.DurationStyle;
@@ -19,8 +21,12 @@ import static com.ktb.chatapp.model.Session.SESSION_TTL;
 public class SessionService {
 
     private final SessionStore sessionStore;
-    private static final long VALIDATION_CACHE_MILLIS = 1_000L;
-    private final ConcurrentHashMap<String, CachedSession> validationCache = new ConcurrentHashMap<>();
+    private static final Duration VALIDATION_CACHE_TTL = Duration.ofSeconds(1);
+    private static final long VALIDATION_CACHE_MAXIMUM_SIZE = 10_000L;
+    private final Cache<String, SessionData> validationCache = Caffeine.newBuilder()
+            .expireAfterWrite(VALIDATION_CACHE_TTL)
+            .maximumSize(VALIDATION_CACHE_MAXIMUM_SIZE)
+            .build();
     public static final long SESSION_TTL_SEC = DurationStyle.detectAndParse(SESSION_TTL).getSeconds();
     private static final long SESSION_TIMEOUT = SESSION_TTL_SEC * 1000;
 
@@ -78,9 +84,9 @@ public class SessionService {
 
             long now = Instant.now().toEpochMilli();
             String cacheKey = userId + ":" + sessionId;
-            CachedSession cached = validationCache.get(cacheKey);
-            if (cached != null && now - cached.validatedAt() < VALIDATION_CACHE_MILLIS) {
-                return SessionValidationResult.valid(cached.sessionData());
+            SessionData cached = validationCache.getIfPresent(cacheKey);
+            if (cached != null) {
+                return SessionValidationResult.valid(cached);
             }
 
             SessionTouchResult touchResult = sessionStore.validateAndTouch(
@@ -104,7 +110,7 @@ public class SessionService {
 
             Session session = touchResult.session();
             SessionData sessionData = toSessionData(session);
-            validationCache.put(cacheKey, new CachedSession(sessionData, now));
+            validationCache.put(cacheKey, sessionData);
             return SessionValidationResult.valid(sessionData);
 
         } catch (Exception e) {
@@ -168,14 +174,12 @@ public class SessionService {
             return;
         }
         if (sessionId != null) {
-            validationCache.remove(userId + ":" + sessionId);
+            validationCache.invalidate(userId + ":" + sessionId);
         } else {
             String prefix = userId + ":";
-            validationCache.keySet().removeIf(key -> key.startsWith(prefix));
+            validationCache.asMap().keySet().removeIf(key -> key.startsWith(prefix));
         }
     }
-
-    private record CachedSession(SessionData sessionData, long validatedAt) {}
 
     public SessionData getActiveSession(String userId) {
         try {
