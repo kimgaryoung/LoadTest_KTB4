@@ -3,16 +3,8 @@ import { useRouter } from 'next/router';
 import { ThemeProvider } from '@vapor-ui/core';
 import '@vapor-ui/core/styles.css';
 import '../styles/globals.css';
-import ChatHeader from '@/components/ChatHeader';
 import ToastContainer from '@/components/Toast';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { SocketProvider } from '@/lib/socket/SocketProvider';
-
-const AuthenticatedSocketProvider = ({ children }) => {
-  const { user } = useAuth();
-
-  return <SocketProvider session={user}>{children}</SocketProvider>;
-};
+import { AuthProvider } from '@/contexts/AuthContext';
 
 function MyApp({ Component, pageProps }) {
   const router = useRouter();
@@ -22,17 +14,13 @@ function MyApp({ Component, pageProps }) {
     return <Component {...pageProps} />;
   }
 
-  // 로그인/회원가입 페이지에서는 헤더 숨김
-  const showHeader = !['/', '/register'].includes(router.pathname);
+  const getLayout = Component.getLayout || ((page) => page);
 
   return (
     <ThemeProvider defaultTheme="dark">
       <AuthProvider>
-        <AuthenticatedSocketProvider>
-          {showHeader && <ChatHeader />}
-          <Component {...pageProps} />
-          <ToastContainer />
-        </AuthenticatedSocketProvider>
+        {getLayout(<Component {...pageProps} />)}
+        <ToastContainer />
       </AuthProvider>
     </ThemeProvider>
   );

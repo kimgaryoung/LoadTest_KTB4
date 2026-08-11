@@ -4,6 +4,7 @@ import { Button, Box, VStack, HStack, Field, Form, Text, TextInput, Callout } fr
 import authService from '@/services/authService';
 import { withAuth, useAuth } from '@/contexts/AuthContext';
 import ProfileImageUpload from '@/components/ProfileImageUpload';
+import AuthenticatedPageShell from '@/components/AuthenticatedPageShell';
 import { generateColorFromEmail, getContrastTextColor } from '@/utils/colorUtils';
 
 const Profile = () => {
@@ -228,4 +229,10 @@ const Profile = () => {
   );
 };
 
-export default withAuth(Profile);
+const AuthenticatedProfile = withAuth(Profile);
+
+AuthenticatedProfile.getLayout = (page) => (
+  <AuthenticatedPageShell>{page}</AuthenticatedPageShell>
+);
+
+export default AuthenticatedProfile;

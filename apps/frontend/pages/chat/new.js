@@ -15,6 +15,7 @@ import {
 } from '@vapor-ui/core';
 import { useAuth, withAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api/client';
+import AuthenticatedPageShell from '@/components/AuthenticatedPageShell';
 
 export function NewChatRoom() {
   const router = useRouter();
@@ -182,4 +183,10 @@ export function NewChatRoom() {
   );
 }
 
-export default withAuth(NewChatRoom);
+const AuthenticatedNewChatRoom = withAuth(NewChatRoom);
+
+AuthenticatedNewChatRoom.getLayout = (page) => (
+  <AuthenticatedPageShell>{page}</AuthenticatedPageShell>
+);
+
+export default AuthenticatedNewChatRoom;

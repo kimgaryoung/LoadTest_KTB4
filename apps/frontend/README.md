@@ -139,6 +139,10 @@ docker run -p 3000:3000 chat-app-frontend
 
 App Router(`app/`)와 Pages Router(`pages/`)를 함께 쓰는 전환 중 구조입니다.
 채팅 화면은 App Router로 옮겨졌고, 인증·프로필 화면은 아직 Pages Router에 있습니다.
+Pages Router의 보호 화면은 페이지별 `getLayout`에서 `AuthenticatedPageShell`을
+정적으로 사용합니다. `_app.js`에서 채팅 셸을 동적으로 감싸지 않으므로 보호 화면의
+라우팅을 비동기 청크에 의존시키지 않으면서 공개 인증 화면 번들에서는 Socket.IO와
+채팅 헤더를 제외합니다.
 
 ```
 frontend/
@@ -157,6 +161,7 @@ frontend/
 │   ├── register.js    # 회원가입 페이지
 │   └── profile.js     # 프로필 페이지
 ├── components/        # 재사용 가능한 React 컴포넌트
+│   ├── AuthenticatedPageShell.js # Pages Router 보호 화면 레이아웃
 │   ├── ChatHeader.js
 │   ├── ChatInput.js
 │   ├── ChatMessages.js

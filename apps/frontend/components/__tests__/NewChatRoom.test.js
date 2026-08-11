@@ -42,6 +42,7 @@ describe('NewChatRoom', () => {
   it('is exported through the authentication boundary', () => {
     expect(mocks.withAuth).toHaveBeenCalledWith(NewChatRoom);
     expect(AuthenticatedNewChatRoom).toBe(NewChatRoom);
+    expect(AuthenticatedNewChatRoom.getLayout).toEqual(expect.any(Function));
   });
 
   it('enables room creation after the controlled room name changes', () => {
