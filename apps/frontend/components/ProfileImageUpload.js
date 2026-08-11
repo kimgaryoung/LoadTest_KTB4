@@ -6,6 +6,7 @@ import CustomAvatar from '@/components/CustomAvatar';
 import { Toast } from '@/components/Toast';
 import api from '@/lib/api/client';
 import { saveStoredUser } from '@/lib/auth/authStorage';
+import fileService from '@/services/fileService';
 
 const ProfileImageUpload = ({ currentImage, onImageChange }) => {
   const { user } = useAuth();
@@ -55,22 +56,19 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
         throw new Error('인증 정보가 없습니다.');
       }
 
-      // FormData 생성
-      const formData = new FormData();
-      formData.append('profileImage', file);
-
-      // 파일 업로드 요청
-      const response = await api.post(
-        '/api/users/profile-image',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-
-      const data = response.data;
+      let data;
+      if (process.env.NEXT_PUBLIC_FILE_DIRECT_UPLOAD_ENABLED === 'true') {
+        data = await fileService.uploadProfileImageDirect(file);
+      } else {
+        const formData = new FormData();
+        formData.append('profileImage', file);
+        const response = await api.post(
+          '/api/users/profile-image',
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        data = response.data;
+      }
 
       if (!data?.imageUrl) {
         throw new Error(data?.message || '이미지 업로드에 실패했습니다.');

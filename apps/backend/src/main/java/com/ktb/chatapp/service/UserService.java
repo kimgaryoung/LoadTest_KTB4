@@ -1,9 +1,13 @@
 package com.ktb.chatapp.service;
 
 import com.ktb.chatapp.dto.ProfileImageResponse;
+import com.ktb.chatapp.dto.PresignUploadRequest;
+import com.ktb.chatapp.dto.PresignUploadResponse;
 import com.ktb.chatapp.dto.UpdateProfileRequest;
 import com.ktb.chatapp.dto.UserResponse;
 import com.ktb.chatapp.model.User;
+import com.ktb.chatapp.model.UploadIntent;
+import com.ktb.chatapp.model.UploadPurpose;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.cache.CachedUserProfile;
 import com.ktb.chatapp.service.cache.UserProfileCache;
@@ -30,6 +34,7 @@ public class UserService {
     private final FileService fileService;
     private final StoragePort storagePort;
     private final UserProfileCache userProfileCache;
+    private final UploadIntentService uploadIntentService;
 
     @Value("${app.profile.image.max-size:5242880}") // 5MB
     private long maxProfileImageSize;
@@ -79,10 +84,7 @@ public class UserService {
         // 파일 유효성 검증
         validateProfileImageFile(file);
 
-        // 기존 프로필 이미지 삭제
-        if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
-            deleteOldProfileImage(user.getProfileImage());
-        }
+        String oldProfileImageKey = user.getProfileImage();
 
         // 새 파일 저장 (보안 검증 포함)
         String profileImageKey = fileService.storeFile(file, "profiles");
@@ -93,9 +95,47 @@ public class UserService {
         userRepository.save(user);
         userProfileCache.put(user);
 
+        if (oldProfileImageKey != null && !oldProfileImageKey.isEmpty()) {
+            deleteOldProfileImage(oldProfileImageKey);
+        }
+
         log.info("프로필 이미지 업로드 완료 - User ID: {}, Key: {}", user.getId(), profileImageKey);
 
         return ProfileImageResponse.updated(profileImageKey);
+    }
+
+    public PresignUploadResponse prepareProfileImageUpload(
+            String email,
+            PresignUploadRequest request) {
+        User user = userRepository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+        return uploadIntentService.prepare(user.getId(), UploadPurpose.PROFILE, request);
+    }
+
+    public ProfileImageResponse completeProfileImageUpload(String email, String uploadIntentId) {
+        User user = userRepository.findByEmail(email.toLowerCase())
+                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+        UploadIntent intent = uploadIntentService.verify(
+                uploadIntentId, user.getId(), UploadPurpose.PROFILE);
+
+        if (intent.getObjectKey().equals(user.getProfileImage())) {
+            uploadIntentService.markCompleted(intent);
+            uploadIntentService.markBound(intent.getId());
+            return ProfileImageResponse.updated(intent.getObjectKey());
+        }
+
+        String oldProfileImageKey = user.getProfileImage();
+        user.setProfileImage(intent.getObjectKey());
+        user.setUpdatedAt(LocalDateTime.now());
+        User updatedUser = userRepository.save(user);
+        userProfileCache.put(updatedUser);
+        uploadIntentService.markCompleted(intent);
+        uploadIntentService.markBound(intent.getId());
+
+        if (oldProfileImageKey != null && !oldProfileImageKey.isEmpty()) {
+            deleteOldProfileImage(oldProfileImageKey);
+        }
+        return ProfileImageResponse.updated(intent.getObjectKey());
     }
 
     /**
@@ -167,11 +207,12 @@ public class UserService {
                 .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
 
         if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
-            deleteOldProfileImage(user.getProfileImage());
+            String oldProfileImageKey = user.getProfileImage();
             user.setProfileImage("");
             user.setUpdatedAt(LocalDateTime.now());
             userRepository.save(user);
             userProfileCache.put(user);
+            deleteOldProfileImage(oldProfileImageKey);
             log.info("프로필 이미지 삭제 완료 - User ID: {}", user.getId());
         }
     }

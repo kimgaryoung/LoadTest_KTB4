@@ -44,6 +44,7 @@ NEXT_PUBLIC_SOCKET_URL=http://localhost:5002
 
 **환경 변수 설명:**
 - `NEXT_PUBLIC_API_URL`: 백엔드 REST API 서버 주소
+- `NEXT_PUBLIC_FILE_DIRECT_UPLOAD_ENABLED`: `true`이면 채팅 첨부와 프로필 이미지를 presigned URL로 S3에 직접 업로드합니다. 백엔드의 `FILE_STORAGE_TYPE=s3`, `FILE_DIRECT_UPLOAD_ENABLED=true`와 함께 사용합니다.
 - `NEXT_PUBLIC_SOCKET_URL`: Socket.IO 서버 주소
 
 서버환경에서 실행시 Route 53 에 등록한 도메인을 입력하세요. 예: `https://chat.goorm-ktb-[번호].goorm.team`

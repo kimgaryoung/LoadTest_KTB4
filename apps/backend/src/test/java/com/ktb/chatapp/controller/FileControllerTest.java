@@ -4,23 +4,30 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ktb.chatapp.model.User;
+import com.ktb.chatapp.model.File;
+import com.ktb.chatapp.dto.PresignUploadResponse;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.security.SessionAwareJwtAuthenticationConverter;
 import com.ktb.chatapp.service.FileAccess;
 import com.ktb.chatapp.service.FileAccessService;
 import com.ktb.chatapp.service.FileService;
+import com.ktb.chatapp.service.UploadIntentService;
+import com.ktb.chatapp.service.DirectFileUploadService;
 import com.ktb.chatapp.service.PreviewNotSupportedException;
 import com.ktb.chatapp.service.RateLimitService;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.Optional;
+import java.util.Map;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,6 +69,12 @@ class FileControllerTest {
 
     @MockitoBean
     private FileAccessService fileAccessService;
+
+    @MockitoBean
+    private UploadIntentService uploadIntentService;
+
+    @MockitoBean
+    private DirectFileUploadService directFileUploadService;
 
     @MockitoBean
     private UserRepository userRepository;
@@ -178,6 +191,52 @@ class FileControllerTest {
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("미리보기를 지원하지 않는 파일 형식입니다."));
+    }
+
+    @Test
+    @DisplayName("presign 준비 URL은 기존 /api/files/upload 완료 URL과 분리된다")
+    void prepareDirectUpload_usesNonConflictingUrl() throws Exception {
+        when(uploadIntentService.prepare(any(), any(), any())).thenReturn(
+                new PresignUploadResponse(
+                        "intent-1",
+                        "chat/generated.png",
+                        "https://bucket.example/upload",
+                        "PUT",
+                        Map.of("Content-Type", java.util.List.of("image/png")),
+                        Instant.now().plusSeconds(600)));
+
+        mockMvc.perform(post("/api/files/presign")
+                        .principal(PRINCIPAL)
+                        .contentType("application/json")
+                        .content("""
+                                {"originalFilename":"photo.png","contentType":"image/png",
+                                 "size":11,"checksumSha256":"checksum"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.uploadIntentId").value("intent-1"))
+                .andExpect(jsonPath("$.method").value("PUT"));
+    }
+
+    @Test
+    @DisplayName("direct upload 완료는 기존 file 응답 스키마를 유지한다")
+    void completeDirectUpload_preservesExistingResponseShape() throws Exception {
+        when(directFileUploadService.complete("intent-1", USER_ID)).thenReturn(
+                File.builder()
+                        .id("file-1")
+                        .filename(FILE_NAME)
+                        .originalname(ORIGINAL_NAME)
+                        .mimetype("image/png")
+                        .size(11)
+                        .build());
+
+        mockMvc.perform(post("/api/files/upload")
+                        .principal(PRINCIPAL)
+                        .contentType("application/json")
+                        .content("{\"uploadIntentId\":\"intent-1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.file._id").value("file-1"))
+                .andExpect(jsonPath("$.file.filename").value(FILE_NAME));
     }
 
     @Test

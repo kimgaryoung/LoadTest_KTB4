@@ -5,7 +5,7 @@ import { Toast } from '../components/Toast';
 class FileService {
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL;
-    this.uploadLimit = 50 * 1024 * 1024; // 50MB
+    this.uploadLimit = 5 * 1024 * 1024; // 백엔드 공통 제한과 동일하게 유지
     this.retryAttempts = 3;
     this.retryDelay = 1000;
     this.activeUploads = new Map();
@@ -14,13 +14,13 @@ class FileService {
       image: {
         extensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
         mimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-        maxSize: 10 * 1024 * 1024,
+        maxSize: 5 * 1024 * 1024,
         name: '이미지'
       },
       document: {
         extensions: ['.pdf'],
         mimeTypes: ['application/pdf'],
-        maxSize: 20 * 1024 * 1024,
+        maxSize: 5 * 1024 * 1024,
         name: 'PDF 문서'
       }
     };
@@ -80,6 +80,10 @@ class FileService {
       return validationResult;
     }
 
+    if (process.env.NEXT_PUBLIC_FILE_DIRECT_UPLOAD_ENABLED === 'true') {
+      return this.uploadFileDirect(file, onProgress);
+    }
+
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -97,7 +101,7 @@ class FileService {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
-        // 업로드는 한도가 50MB 라 공통 타임아웃으로는 정상 전송도 끊긴다.
+        // 파일 전송은 공통 API 타임아웃보다 길 수 있어 업로드용 타임아웃을 사용한다.
         timeout: 30000,
         cancelToken: source.token,
         withCredentials: true,
@@ -148,6 +152,96 @@ class FileService {
 
       return this.handleUploadError(error);
     }
+  }
+
+  async uploadFileDirect(file, onProgress) {
+    const source = CancelToken.source();
+    this.activeUploads.set(file.name, source);
+
+    try {
+      const checksumSha256 = await this.sha256Base64(file);
+      const prepared = await axiosInstance.post('/api/files/presign', {
+        originalFilename: file.name,
+        contentType: file.type,
+        size: file.size,
+        checksumSha256,
+      }, {
+        retry: false,
+        cancelToken: source.token,
+      });
+
+      await this.putToObjectStorage(prepared.data, file, source.token, onProgress);
+
+      const completed = await axiosInstance.post('/api/files/upload', {
+        uploadIntentId: prepared.data.uploadIntentId,
+      }, {
+        retry: false,
+        cancelToken: source.token,
+      });
+      this.activeUploads.delete(file.name);
+
+      const fileData = completed.data.file;
+      return {
+        success: true,
+        data: {
+          ...completed.data,
+          file: {
+            ...fileData,
+            url: this.getFileUrl(fileData.filename, true),
+          },
+        },
+      };
+    } catch (error) {
+      this.activeUploads.delete(file.name);
+      if (isCancel(error)) {
+        return { success: false, message: '업로드가 취소되었습니다.' };
+      }
+      return this.handleUploadError(error);
+    }
+  }
+
+  async uploadProfileImageDirect(file, onProgress) {
+    const checksumSha256 = await this.sha256Base64(file);
+    const prepared = await axiosInstance.post('/api/users/presign-profile-image', {
+      originalFilename: file.name,
+      contentType: file.type,
+      size: file.size,
+      checksumSha256,
+    }, { retry: false });
+
+    await this.putToObjectStorage(prepared.data, file, undefined, onProgress);
+    const completed = await axiosInstance.post('/api/users/profile-image', {
+      uploadIntentId: prepared.data.uploadIntentId,
+    }, { retry: false });
+    return completed.data;
+  }
+
+  async putToObjectStorage(prepared, file, cancelToken, onProgress) {
+    const headers = {};
+    for (const [name, values] of Object.entries(prepared.headers || {})) {
+      const lowerName = name.toLowerCase();
+      if (lowerName === 'host' || lowerName === 'content-length') continue;
+      headers[name] = Array.isArray(values) ? values.join(',') : values;
+    }
+    await axios.put(prepared.uploadUrl, file, {
+      headers,
+      timeout: 30000,
+      cancelToken,
+      withCredentials: false,
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          onProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+        }
+      },
+    });
+  }
+
+  async sha256Base64(file) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    const bytes = new Uint8Array(digest);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return globalThis.btoa(binary);
   }
   getFileUrl(filename, forPreview = false) {
     if (!filename) return '';
