@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { VStack, HStack } from '@vapor-ui/core';
 import MessageContent from './MessageContent';
 import MessageActions from './MessageActions';
@@ -13,8 +13,6 @@ const UserMessage = ({
   onReactionRemove,
   room = null
 }) => {
-  // 메시지 DOM 요소에 대한 ref 생성
-  const messageDomRef = useRef(null);
   const formattedTime = new Date(msg.timestamp).toLocaleString('ko-KR', {
     year: 'numeric',
     month: 'long',
@@ -28,7 +26,7 @@ const UserMessage = ({
   const user = isMine ? currentUser : msg.sender;
 
   return (
-    <div className="my-4" ref={messageDomRef} data-testid="message-container">
+    <div className="my-4" data-testid="message-container">
       <VStack
         className={`max-w-[65%] ${isMine ? 'ml-auto items-end' : 'mr-auto items-start'}`}
         align={isMine ? 'flex-end' : 'flex-start'}
@@ -83,9 +81,7 @@ const UserMessage = ({
               messageType={msg.type}
               participants={room?.participants || []}
               readers={msg.readers || []}
-              messageId={msg._id}
-              messageRef={messageDomRef}
-              currentUserId={currentUser?._id || currentUser?.id}
+              senderId={msg.sender?._id || msg.sender?.id || msg.sender}
             />
           </HStack>
         </div>

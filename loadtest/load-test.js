@@ -49,6 +49,11 @@ const argv = yargs(hideBin(process.argv))
     type: 'string',
     default: null
   })
+  .option('leave-on-close', {
+    description: 'Emit leaveRoom before closing each socket',
+    type: 'boolean',
+    default: false
+  })
   .option('batch-size', {
     alias: 'b',
     description: 'Number of users to spawn simultaneously per batch',
@@ -80,6 +85,12 @@ class LoadTester {
       reactionUpdatesReceived: 0,
       sessionEndedReceived: 0,
       participantsUpdatesReceived: 0,
+      participantUpdateBytes: 0,
+      participantUpdatePayloadBytes: [],
+      participantFullListEvents: 0,
+      participantDeltaEvents: 0,
+      initialParticipantListBytes: 0,
+      initialParticipantListEvents: 0,
       errorsAuth: 0,
       errorsConnection: 0,
       errorsMessage: 0,
@@ -230,6 +241,11 @@ class LoadTester {
         socket.on(SERVER_EMIT.JOIN_ROOM_SUCCESS, (data) => {
           this.log('info', `User ${userId} joined room ${roomId} with ${data.participants?.length || 0} participants`);
 
+          if (Array.isArray(data.participants)) {
+            this.metrics.initialParticipantListEvents++;
+            this.metrics.initialParticipantListBytes += Buffer.byteLength(JSON.stringify(data.participants), 'utf8');
+          }
+
           // Fetch previous messages before starting to send
           socket.emit(CLIENT_EMIT.FETCH_PREVIOUS_MESSAGES, { roomId: roomId, limit: 30 });
 
@@ -287,6 +303,14 @@ class LoadTester {
 
         socket.on(SERVER_EMIT.PARTICIPANTS_UPDATE, (data) => {
           this.metrics.participantsUpdatesReceived++;
+          const payloadBytes = Buffer.byteLength(JSON.stringify(data), 'utf8');
+          this.metrics.participantUpdateBytes += payloadBytes;
+          this.metrics.participantUpdatePayloadBytes.push(payloadBytes);
+          if (Array.isArray(data)) {
+            this.metrics.participantFullListEvents++;
+          } else if (data?.type && data?.participant) {
+            this.metrics.participantDeltaEvents++;
+          }
         });
 
         socket.on(SERVER_EMIT.ERROR, (error) => {
@@ -344,6 +368,10 @@ class LoadTester {
 
     // After all messages sent, wait a bit then disconnect
     await this.sleep(5000);
+    if (this.config.leaveOnClose) {
+      socket.emit(CLIENT_EMIT.LEAVE_ROOM, roomId);
+      await this.sleep(100);
+    }
     socket.close();
   }
 
@@ -390,6 +418,9 @@ class LoadTester {
       [chalk.cyan('Reaction Updates Received'), this.metrics.reactionUpdatesReceived],
       [chalk.cyan('Session Ended Received'), this.metrics.sessionEndedReceived],
       [chalk.cyan('Participants Updates Received'), this.metrics.participantsUpdatesReceived],
+      [chalk.cyan('Initial Participant Bytes'), this.metrics.initialParticipantListBytes],
+      [chalk.cyan('Participant Update Bytes'), this.metrics.participantUpdateBytes],
+      [chalk.cyan('Full List / Delta Events'), `${this.metrics.participantFullListEvents} / ${this.metrics.participantDeltaEvents}`],
       ['---', '---'],
       ['Avg Message Latency', `${avgLatency}ms`],
       ['P95 Message Latency', `${p95Latency}ms`],
@@ -521,7 +552,8 @@ const tester = new LoadTester({
   duration: argv.duration,
   messages: argv.messages,
   batchSize: argv.batchSize,
-  batchDelay: argv.batchDelay
+  batchDelay: argv.batchDelay,
+  leaveOnClose: argv.leaveOnClose
 });
 
 tester.run().catch(error => {

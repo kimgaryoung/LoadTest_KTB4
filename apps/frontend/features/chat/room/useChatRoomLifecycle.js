@@ -61,6 +61,7 @@ export const useChatRoomLifecycle = ({
     actions,
     cleanup,
     handleReactionUpdate,
+    activeSocket,
   });
 
   const cleanupRef = useRef(cleanup);

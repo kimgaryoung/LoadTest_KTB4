@@ -24,6 +24,7 @@ const ChatInput = forwardRef(({
   const emojiButtonRef = useRef(null);
   const dropZoneRef = useRef(null);
   const internalInputRef = useRef(null);
+  const [submitting, setSubmitting] = useState(false);
   // Korean/Japanese/Chinese IMEs emit Enter to finish a composition before the
   // user presses Enter to send. Keep this outside React state so the keydown
   // handler observes it synchronously.
@@ -106,6 +107,12 @@ const ChatInput = forwardRef(({
   const handleSubmit = useCallback(async (e) => {
     e?.preventDefault();
 
+    if (submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+
     if (files.length > 0) {
       try {
         const file = files[0];
@@ -113,7 +120,7 @@ const ChatInput = forwardRef(({
           throw new Error('파일이 선택되지 않았습니다.');
         }
 
-        onSubmit({
+        await onSubmit({
           type: 'file',
           content: message.trim(),
           fileData: file
@@ -127,17 +134,25 @@ const ChatInput = forwardRef(({
       } catch (error) {
         console.error('File submit error:', error);
         setUploadError(error.message);
+      } finally {
+        setSubmitting(false);
       }
     } else if (message.trim()) {
-      onSubmit({
-        type: 'text',
-        content: message.trim()
-      });
-      setMessage('');
-      setShowEmojiPicker(false);
-      setShowMentionList(false);
+      try {
+        await onSubmit({
+          type: 'text',
+          content: message.trim()
+        });
+        setMessage('');
+        setShowEmojiPicker(false);
+        setShowMentionList(false);
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      setSubmitting(false);
     }
-  }, [files, message, onSubmit, setMessage, setShowEmojiPicker, setShowMentionList]);
+  }, [files, message, onSubmit, setMessage, setShowEmojiPicker, setShowMentionList, submitting]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -371,7 +386,7 @@ const ChatInput = forwardRef(({
     }, 0);
   }, [message, setMessage, setShowEmojiPicker, messageInputRef]);
 
-  const isDisabled = disabled || uploading || externalUploading;
+  const isDisabled = disabled || uploading || externalUploading || submitting;
 
   return (
     <>

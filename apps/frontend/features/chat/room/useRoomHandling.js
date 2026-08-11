@@ -16,6 +16,7 @@ export const useRoomHandling = ({
   actions,
   cleanup,
   handleReactionUpdate,
+  activeSocket,
 }) => {
   const { onReplace, asPath } = route;
   const { currentUser } = state;
@@ -43,6 +44,8 @@ export const useRoomHandling = ({
   const { user, refreshToken, logout } = useAuth();
   const setupPromiseRef = useRef(null);
   const roomEventsUnsubscribeRef = useRef(null);
+  const roomEventsSocketRef = useRef(null);
+  const roomEventsRoomIdRef = useRef(null);
   const MAX_SOCKET_RECONNECT_ATTEMPTS = 3;
   const MAX_MESSAGE_RETRY_ATTEMPTS = 3;
   const MESSAGE_TIMEOUT = 5000;
@@ -68,42 +71,71 @@ export const useRoomHandling = ({
     ]
   );
 
-  const setupEventListeners = useCallback(() => {
-    if (!socketRef.current || !mountedRef.current) return;
+  const roomEventCallbacksRef = useRef({
+    processMessages,
+    cleanup,
+    logout,
+    onReplace,
+    handleReactionUpdate,
+  });
 
-    if (roomEventsUnsubscribeRef.current) {
-      roomEventsUnsubscribeRef.current();
-      roomEventsUnsubscribeRef.current = null;
+  useEffect(() => {
+    roomEventCallbacksRef.current = {
+      processMessages,
+      cleanup,
+      logout,
+      onReplace,
+      handleReactionUpdate,
+    };
+  }, [cleanup, handleReactionUpdate, logout, onReplace, processMessages]);
+
+  const unsubscribeRoomEvents = useCallback(() => {
+    roomEventsUnsubscribeRef.current?.();
+    roomEventsUnsubscribeRef.current = null;
+    roomEventsSocketRef.current = null;
+    roomEventsRoomIdRef.current = null;
+  }, []);
+
+  const setupEventListeners = useCallback((socket = socketRef.current) => {
+    if (!socket?.connected || !mountedRef.current) return;
+
+    if (
+      roomEventsSocketRef.current === socket &&
+      roomEventsRoomIdRef.current === roomId &&
+      roomEventsUnsubscribeRef.current
+    ) {
+      return;
     }
 
+    unsubscribeRoomEvents();
     roomEventsUnsubscribeRef.current = socketClient.subscribeRoomEvents(
-      socketRef.current,
+      socket,
       createRoomEventHandlers({
+        roomId,
         mountedRef,
         messageProcessingRef,
         processedMessageIds,
         initialLoadCompletedRef,
-        processMessages,
+        processMessages: (...args) => roomEventCallbacksRef.current.processMessages(...args),
         setRoom,
         setMessages,
         setLoadingMessages,
         setError,
         setHasMoreMessages,
-        cleanup,
-        logout,
-        onReplace,
-        handleReactionUpdate,
+        cleanup: (...args) => roomEventCallbacksRef.current.cleanup(...args),
+        logout: (...args) => roomEventCallbacksRef.current.logout(...args),
+        onReplace: (...args) => roomEventCallbacksRef.current.onReplace(...args),
+        handleReactionUpdate: (...args) => roomEventCallbacksRef.current.handleReactionUpdate(...args),
         showRejectedMessage: Toast.error.bind(Toast),
       })
     );
+    roomEventsSocketRef.current = socket;
+    roomEventsRoomIdRef.current = roomId;
   }, [
-    processMessages,
+    roomId,
     setHasMoreMessages,
-    cleanup,
-    handleReactionUpdate,
     setLoadingMessages,
     setError,
-    logout,
     socketRef,
     mountedRef,
     messageProcessingRef,
@@ -111,8 +143,12 @@ export const useRoomHandling = ({
     initialLoadCompletedRef,
     setRoom,
     setMessages,
-    onReplace,
+    unsubscribeRoomEvents,
   ]);
+
+  useEffect(() => {
+    setupEventListeners(activeSocket);
+  }, [activeSocket, setupEventListeners]);
 
   const handleSessionError = useCallback(async () => {
     try {
@@ -368,6 +404,10 @@ export const useRoomHandling = ({
         if (mountedRef.current && socketRef.current?.connected) {
           const joinResult = await joinRoom(roomId);
 
+          if (Array.isArray(joinResult?.participants)) {
+            roomData.participants = joinResult.participants;
+          }
+
           if (Array.isArray(joinResult?.messages)) {
             processMessages(joinResult.messages, joinResult.hasMore, true);
           } else {
@@ -431,10 +471,7 @@ export const useRoomHandling = ({
       initializingRef.current = false;
       setupCompleteRef.current = false;
 
-      if (roomEventsUnsubscribeRef.current) {
-        roomEventsUnsubscribeRef.current();
-        roomEventsUnsubscribeRef.current = null;
-      }
+      unsubscribeRoomEvents();
 
       // 언마운트 경로는 attachSocket 을 쓰지 않는다. 사라지는 컴포넌트에
        // 소켓 교체를 통지할 구독자가 없다.
@@ -443,7 +480,7 @@ export const useRoomHandling = ({
         socketRef.current = null;
       }
     };
-  }, []);
+  }, [unsubscribeRoomEvents]);
 
   return {
     setupRoom,

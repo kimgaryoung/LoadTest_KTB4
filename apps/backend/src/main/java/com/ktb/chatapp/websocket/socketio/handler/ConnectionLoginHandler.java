@@ -31,7 +31,6 @@ public class ConnectionLoginHandler {
     private final ConnectedUsers connectedUsers;
     private final UserRooms userRooms;
     private final RoomJoinHandler roomJoinHandler;
-    private final RoomLeaveHandler roomLeaveHandler;
 
     public ConnectionLoginHandler(
             SocketIOServer socketIOServer,
@@ -44,7 +43,6 @@ public class ConnectionLoginHandler {
         this.connectedUsers = connectedUsers;
         this.userRooms = userRooms;
         this.roomJoinHandler = roomJoinHandler;
-        this.roomLeaveHandler = roomLeaveHandler;
 
         // Register gauge metric for concurrent users
         Gauge.builder("socketio.concurrent.users", connectedUsers::size)
@@ -63,10 +61,14 @@ public class ConnectionLoginHandler {
             notifyDuplicateLogin(client, userId);
             client.set("user", user);
             
-            userRooms.get(userId).forEach(roomId -> {
-                // 재접속 시 기존 참여 방 재입장 처리
-                roomJoinHandler.handleJoinRoom(client, roomId);
-            });
+            // 복원 중에는 RoomJoinHandler가 소켓 방에만 다시 붙이고 응답과 delta는 보내지 않는다.
+            // 현재 화면의 명시적 joinRoom 요청만 joinRoomSuccess를 수신해야 한다.
+            client.set(RoomJoinHandler.ROOM_RESTORE_IN_PROGRESS, Boolean.TRUE);
+            try {
+                userRooms.get(userId).forEach(roomId -> roomJoinHandler.handleJoinRoom(client, roomId));
+            } finally {
+                client.del(RoomJoinHandler.ROOM_RESTORE_IN_PROGRESS);
+            }
             
             connectedUsers.set(userId, user);
 

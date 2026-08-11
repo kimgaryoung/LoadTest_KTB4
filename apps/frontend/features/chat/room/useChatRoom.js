@@ -86,16 +86,6 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
         socketClient.tryLeaveRoom(roomId, socketRef.current);
       }
 
-      if (socketRef.current && reason !== 'RECONNECT') {
-        socketRef.current.off('message');
-        socketRef.current.off('previousMessagesLoaded');
-        socketRef.current.off('participantsUpdate');
-        socketRef.current.off('messagesRead');
-        socketRef.current.off('messageReactionUpdate');
-        socketRef.current.off('session_ended');
-        socketRef.current.off('error');
-      }
-
       // Clear timeouts
       if (loadMoreTimeoutRef.current) {
         clearTimeout(loadMoreTimeoutRef.current);
@@ -146,6 +136,19 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
     handleReactionUpdate,
   } = useReactionHandling({ currentUser, messages, setMessages });
 
+  const handleVisibleMessagesRead = useCallback((messageIds) => {
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return false;
+    }
+
+    if (!activeSocket?.connected || !socketClient.canSend()) {
+      return false;
+    }
+
+    socketClient.markMessagesAsRead(messageIds, activeSocket);
+    return true;
+  }, [activeSocket]);
+
   const {
     connectionStatus: derivedConnectionStatus,
     retryMessageLoad,
@@ -189,6 +192,7 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
     removeFilePreview,
     handleReactionAdd,
     handleReactionRemove,
+    handleVisibleMessagesRead,
     handleLoadMore,
     cleanup,
 

@@ -73,6 +73,7 @@ public class MessageReactionHandler {
                 data.getType(), data.getReaction(), message.getId(), userId);
 
             MessageReactionResponse response = new MessageReactionResponse(
+                message.getRoomId(),
                 message.getId(),
                 message.getReactions()
             );

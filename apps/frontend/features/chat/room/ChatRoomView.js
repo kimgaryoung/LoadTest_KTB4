@@ -30,6 +30,7 @@ const ChatRoomView = ({ roomId, onNavigate, onReplace, asPath }) => {
     error,
     handleReactionAdd,
     handleReactionRemove,
+    handleVisibleMessagesRead,
     loadingMessages,
     hasMoreMessages,
     handleLoadMore,
@@ -138,6 +139,7 @@ const ChatRoomView = ({ roomId, onNavigate, onReplace, asPath }) => {
         room={room}
         onReactionAdd={handleReactionAdd}
         onReactionRemove={handleReactionRemove}
+        onVisibleMessagesRead={handleVisibleMessagesRead}
         loadingMessages={loadingMessages}
         hasMoreMessages={hasMoreMessages}
         onLoadMore={handleLoadMore}

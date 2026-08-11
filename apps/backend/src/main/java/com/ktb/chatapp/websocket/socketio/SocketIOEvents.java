@@ -89,7 +89,7 @@ public final class SocketIOEvents {
 
     /**
      * 참가자 업데이트
-     * Payload: List<UserDto>
+     * Payload: { type: joined|left, participant: UserDto }
      */
     public static final String PARTICIPANTS_UPDATE = "participantsUpdate";
 

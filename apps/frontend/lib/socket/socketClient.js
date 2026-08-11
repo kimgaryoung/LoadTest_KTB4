@@ -22,6 +22,7 @@ const waitForSocketEvent = ({
   errorEvents,
   timeoutMs,
   timeoutMessage,
+  matchesSuccess = () => true,
   send,
 }) => {
   ensureConnectedSocket(socket);
@@ -44,10 +45,15 @@ const waitForSocketEvent = ({
       callback(value);
     };
 
-    const handleSuccess = (data) => settle(resolve, data);
+    const handleSuccess = (data) => {
+      if (!matchesSuccess(data)) {
+        return;
+      }
+      settle(resolve, data);
+    };
     const handleError = (error) => settle(reject, error);
 
-    socket.once(successEvent, handleSuccess);
+    socket.on(successEvent, handleSuccess);
     for (const event of errorEvents) {
       socket.once(event, handleError);
     }
@@ -144,6 +150,7 @@ export const createSocketClient = (service = socketService) => ({
       errorEvents: ['joinRoomError', 'error'],
       timeoutMs,
       timeoutMessage: '채팅방 입장 시간이 초과되었습니다.',
+      matchesSuccess: (data) => data?.roomId === roomId,
       send: () => sendDomainEvent(service, socket, 'joinRoom', roomId),
     }),
   leaveRoom: (roomId, socket) => sendDomainEvent(service, socket, 'leaveRoom', roomId),

@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useRef } from 'react';
+import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 export const createInitialChatRoomState = () => ({
   room: null,
@@ -114,6 +114,18 @@ export const useChatRoomState = () => {
     undefined,
     createInitialChatRoomState,
   );
+  const messagesRef = useRef(state.messages);
+
+  const setMessages = useCallback((messages) => {
+    const nextMessages = resolveValue(messages, messagesRef.current);
+    messagesRef.current = nextMessages;
+    dispatch({ type: 'messages/changed', messages: nextMessages });
+  }, []);
+
+  const cleanupManual = useCallback(() => {
+    messagesRef.current = [];
+    dispatch({ type: 'room/cleanupManual' });
+  }, []);
 
   const refs = {
     messageLoadAttemptRef: useRef(0),
@@ -127,15 +139,16 @@ export const useChatRoomState = () => {
     initialLoadCompletedRef: useRef(false),
     processedMessageIds: useRef(new Set()),
     loadMoreTimeoutRef: useRef(null),
+    messagesRef,
   };
 
   const actions = useMemo(() => ({
     setupStarted: () => dispatch({ type: 'room/setupStarted' }),
     setupSucceeded: room => dispatch({ type: 'room/setupSucceeded', room }),
     setupFailed: error => dispatch({ type: 'room/setupFailed', error }),
-    cleanupManual: () => dispatch({ type: 'room/cleanupManual' }),
+    cleanupManual,
     setRoom: room => dispatch({ type: 'room/changed', room }),
-    setMessages: messages => dispatch({ type: 'messages/changed', messages }),
+    setMessages,
     setError: error => dispatch({ type: 'error/changed', error }),
     setLoadingMessages: value => dispatch({
       type: 'messages/loadingChanged',
@@ -151,7 +164,7 @@ export const useChatRoomState = () => {
     connectionReconnecting: () => dispatch({ type: 'connection/reconnecting' }),
     connectionRecovered: () => dispatch({ type: 'connection/recovered' }),
     setCurrentUser: currentUser => dispatch({ type: 'user/currentChanged', currentUser }),
-  }), []);
+  }), [cleanupManual, setMessages]);
 
   return {
     state,
