@@ -11,7 +11,7 @@ vi.mock('@/services/axios', () => ({
   },
 }));
 
-const roomsResponse = (rooms) => ({ data: { data: rooms } });
+const roomsResponse = (rooms, metadata = {}) => ({ data: { data: rooms, metadata } });
 
 const renderRoomList = ({ router = { push: vi.fn() } } = {}) =>
   renderHook(() =>
@@ -45,6 +45,60 @@ describe('useRoomList', () => {
 
     expect(result.current.rooms).toEqual([{ _id: 'room-1' }]);
     expect(result.current.refreshing).toBe(false);
+    expect(axiosInstance.get).toHaveBeenCalledWith('/api/rooms', {
+      params: { limit: 20 },
+    });
+  });
+
+  it('loads the next cursor page and appends only rooms not already rendered', async () => {
+    axiosInstance.get
+      .mockResolvedValueOnce(roomsResponse(
+        [{ _id: 'room-2' }, { _id: 'room-1' }],
+        { hasMore: true, nextCursor: 'cursor-1' }
+      ))
+      .mockResolvedValueOnce(roomsResponse(
+        [{ _id: 'room-1' }, { _id: 'room-0' }],
+        { hasMore: false, nextCursor: null }
+      ));
+
+    const { result } = renderRoomList();
+
+    await act(async () => {
+      await result.current.fetchRooms();
+    });
+    expect(result.current.rooms).toHaveLength(2);
+    expect(result.current.hasMore).toBe(true);
+
+    await act(async () => {
+      await result.current.loadMoreRooms();
+    });
+
+    expect(axiosInstance.get).toHaveBeenLastCalledWith('/api/rooms', {
+      params: { limit: 20, cursor: 'cursor-1' },
+    });
+    expect(result.current.rooms.map((room) => room._id)).toEqual([
+      'room-2',
+      'room-1',
+      'room-0',
+    ]);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.loadingMore).toBe(false);
+  });
+
+  it('refreshes back to the first 20-room page and resets its cursor', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({ _id: `room-${index}` }));
+    axiosInstance.get
+      .mockResolvedValueOnce(roomsResponse(firstPage, { hasMore: true, nextCursor: 'cursor-1' }))
+      .mockResolvedValueOnce(roomsResponse([{ _id: 'new-room' }], { hasMore: false }));
+
+    const { result } = renderRoomList();
+    await act(async () => result.current.fetchRooms());
+    expect(result.current.rooms).toHaveLength(20);
+
+    await act(async () => result.current.refreshRooms());
+
+    expect(result.current.rooms).toEqual([{ _id: 'new-room' }]);
+    expect(result.current.hasMore).toBe(false);
   });
 
   it('keeps the current list and stays quiet when a silent refresh fails', async () => {
