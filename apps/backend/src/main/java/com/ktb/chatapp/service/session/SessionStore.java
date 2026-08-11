@@ -32,6 +32,17 @@ public interface SessionStore {
      * @return the stored session
      */
     Session replaceByUserId(Session session);
+
+    /**
+     * Validate the active session and extend its sliding expiration window.
+     * Implementations should make the validation and activity update atomic.
+     */
+    SessionTouchResult validateAndTouch(
+            String userId,
+            String sessionId,
+            long nowEpochMillis,
+            long timeoutMillis,
+            long ttlSeconds);
     
     /**
      * Delete all sessions for a user

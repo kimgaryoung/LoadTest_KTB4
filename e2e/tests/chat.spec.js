@@ -64,6 +64,11 @@ test.describe.serial('채팅 E2E 테스트', () => {
   let testUsers = [];
 
   test.beforeAll(async ({ browser }) => {
+    // 5명의 계정을 순차적으로 회원가입·로그인·로그아웃하므로 기본 hook 제한인
+    // 30초를 안정적으로 넘을 수 있다. 테스트 본문의 제한 시간과 분리해 준비
+    // 단계에만 충분한 시간을 부여한다.
+    test.setTimeout(120_000);
+
     const context = await browser.newContext();
     const page = await context.newPage();
     const testId = Date.now();

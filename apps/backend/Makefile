@@ -12,6 +12,7 @@ DEPLOY_HOSTS_FILE ?= $(CURDIR)/../../.deploy-hosts
 DEPLOY_SERVERS ?= $(or $(shell cat $(DEPLOY_HOSTS_FILE) 2>/dev/null),your-backend-server1)
 DEPLOY_PATH ?= /home/ubuntu/ktb-chat-backend
 JVM_OPTS ?= -Xmx1024m
+SESSION_STORE ?= redis
 JAVA_TARGET_MAJOR ?= 25
 JAVA_TARGET_SDKMAN ?= 25.0.3-librca
 
@@ -126,7 +127,7 @@ dev: setup-env verify-docker
 	# spring-boot:test-run loads src/test/resources/application.properties, where
 	# Socket.IO is disabled to isolate tests. The dev process must override this.
 	@$(SDKMAN_INIT) && \
-	SOCKETIO_ENABLED=true ./mvnw compile spring-boot:test-run \
+	SESSION_STORE="$(SESSION_STORE)" SOCKETIO_ENABLED=true ./mvnw compile spring-boot:test-run \
 		-Dspring-boot.run.profiles=dev \
 		-Dspring-boot.run.jvmArguments="$(JVM_OPTS)"
 

@@ -34,9 +34,6 @@ const createSocket = () => ({
   disconnect: vi.fn(),
 });
 
-const handlerFor = (socket, event) =>
-  socket.on.mock.calls.find(([registered]) => registered === event)[1];
-
 describe('useRoomsSocket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,43 +75,15 @@ describe('useRoomsSocket', () => {
     expect(registeredEvents).not.toContain('roomDeleted');
   });
 
-  it('merges a roomActivity update into the matching room without dropping its other fields', async () => {
+  it('does not register the removed roomActivity event', async () => {
     const socket = createSocket();
-    const setRooms = vi.fn();
-
-    renderRoomsSocket(socket, { setRooms });
+    renderRoomsSocket(socket);
 
     await waitFor(() => {
-      expect(socket.on).toHaveBeenCalledWith('roomActivity', expect.any(Function));
+      expect(socket.on).toHaveBeenCalled();
     });
 
-    handlerFor(socket, 'roomActivity')({ _id: 'room-2', recentMessageCount: 9 });
-
-    const updateRooms = setRooms.mock.calls[0][0];
-
-    expect(
-      updateRooms([
-        { _id: 'room-1', name: '방1', recentMessageCount: 1 },
-        { _id: 'room-2', name: '방2', recentMessageCount: 2 },
-      ])
-    ).toEqual([
-      { _id: 'room-1', name: '방1', recentMessageCount: 1 },
-      { _id: 'room-2', name: '방2', recentMessageCount: 9 },
-    ]);
-  });
-
-  it('ignores a roomActivity payload without a room id', async () => {
-    const socket = createSocket();
-    const setRooms = vi.fn();
-
-    renderRoomsSocket(socket, { setRooms });
-
-    await waitFor(() => {
-      expect(socket.on).toHaveBeenCalledWith('roomActivity', expect.any(Function));
-    });
-
-    handlerFor(socket, 'roomActivity')(undefined);
-
-    expect(setRooms).not.toHaveBeenCalled();
+    const registeredEvents = socket.on.mock.calls.map(([event]) => event);
+    expect(registeredEvents).not.toContain('roomActivity');
   });
 });

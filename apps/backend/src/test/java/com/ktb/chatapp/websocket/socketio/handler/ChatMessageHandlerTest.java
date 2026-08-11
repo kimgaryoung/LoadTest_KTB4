@@ -15,7 +15,6 @@ import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.RateLimitCheckResult;
 import com.ktb.chatapp.service.RateLimitService;
-import com.ktb.chatapp.service.RoomActivityNotifier;
 import com.ktb.chatapp.service.SessionService;
 import com.ktb.chatapp.service.SessionValidationResult;
 import com.ktb.chatapp.util.BannedWordChecker;
@@ -50,7 +49,6 @@ class ChatMessageHandlerTest {
     @Mock private FileRepository fileRepository;
     @Mock private AiService aiService;
     @Mock private SessionService sessionService;
-    @Mock private RoomActivityNotifier roomActivityNotifier;
     @Mock private BannedWordChecker bannedWordChecker;
     @Mock private RateLimitService rateLimitService;
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -68,7 +66,6 @@ class ChatMessageHandlerTest {
                         fileRepository,
                         aiService,
                         sessionService,
-                        roomActivityNotifier,
                         bannedWordChecker,
                         rateLimitService,
                         meterRegistry);
@@ -159,7 +156,6 @@ class ChatMessageHandlerTest {
         ArgumentCaptor<MessageResponse> payloadCaptor = ArgumentCaptor.forClass(MessageResponse.class);
         verify(roomOperations).sendEvent(eq(MESSAGE), payloadCaptor.capture());
         verify(client, never()).sendEvent(eq(MESSAGE), any(MessageResponse.class));
-        verify(roomActivityNotifier).notifyMessageStored("room-1");
         org.junit.jupiter.api.Assertions.assertEquals("message-1", payloadCaptor.getValue().getId());
         org.junit.jupiter.api.Assertions.assertEquals("hello", payloadCaptor.getValue().getContent());
     }

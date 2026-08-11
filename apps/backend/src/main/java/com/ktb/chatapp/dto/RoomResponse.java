@@ -40,9 +40,6 @@ public class RoomResponse {
     @Schema(description = "현재 사용자가 생성자인지 여부", example = "true")
     private boolean isCreator;
 
-    @Schema(description = "최근 30분간 메시지 수", example = "23")
-    private Integer recentMessageCount;
-
     @Schema(description = "참여자 수", example = "5")
     @JsonGetter("participantsCount")
     public int getParticipantsCount() {

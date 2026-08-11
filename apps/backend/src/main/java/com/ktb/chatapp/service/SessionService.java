@@ -2,6 +2,7 @@ package com.ktb.chatapp.service;
 
 import com.ktb.chatapp.model.Session;
 import com.ktb.chatapp.service.session.SessionStore;
+import com.ktb.chatapp.service.session.SessionTouchResult;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,6 +53,7 @@ public class SessionService {
                     .build();
 
             session = sessionStore.replaceByUserId(session);
+            invalidateCache(userId, null);
             
             SessionData sessionData = toSessionData(session);
 
@@ -81,30 +83,26 @@ public class SessionService {
                 return SessionValidationResult.valid(cached.sessionData());
             }
 
-            Session session = sessionStore.findByUserId(userId).orElse(null);
-            
-            if (session == null) {
+            SessionTouchResult touchResult = sessionStore.validateAndTouch(
+                    userId, sessionId, now, SESSION_TIMEOUT, SESSION_TTL_SEC);
+
+            if (touchResult.status() == SessionTouchResult.Status.NOT_FOUND) {
                 log.warn("No session found for userId: {}", userId);
                 return SessionValidationResult.invalid("INVALID_SESSION", "세션을 찾을 수 없습니다.");
             }
 
-            if (!sessionId.equals(session.getSessionId())) {
-                log.warn("Session ID mismatch for userId: {}. Provided: {}, Expected: {}", userId, sessionId, session.getSessionId());
+            if (touchResult.status() == SessionTouchResult.Status.SESSION_ID_MISMATCH) {
+                log.warn("Session ID mismatch for userId: {}. Provided: {}", userId, sessionId);
                 return SessionValidationResult.invalid("INVALID_SESSION", "잘못된 세션 ID입니다.");
             }
 
-            // Check if session has timed out
-            if (now - session.getLastActivity() > SESSION_TIMEOUT) {
+            if (touchResult.status() == SessionTouchResult.Status.EXPIRED) {
                 log.warn("Session timed out for userId: {}, sessionId: {}", userId, sessionId);
-                removeSession(userId, sessionId);
+                invalidateCache(userId, sessionId);
                 return SessionValidationResult.invalid("SESSION_EXPIRED", "세션이 만료되었습니다.");
             }
 
-            // Update last activity
-            session.setLastActivity(now);
-            session.setExpiresAt(Instant.now().plusSeconds(SESSION_TTL_SEC));
-            session = sessionStore.save(session);
-
+            Session session = touchResult.session();
             SessionData sessionData = toSessionData(session);
             validationCache.put(cacheKey, new CachedSession(sessionData, now));
             return SessionValidationResult.valid(sessionData);

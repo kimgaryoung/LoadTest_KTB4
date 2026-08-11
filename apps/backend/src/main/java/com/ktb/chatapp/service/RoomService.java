@@ -27,7 +27,6 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
-    private final RecentMessageCounter recentMessageCounter;
     private final RoomCursorCodec roomCursorCodec;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
@@ -56,12 +55,8 @@ public class RoomService {
                     : room.getParticipantIds().stream()))
             .filter(java.util.Objects::nonNull)
             .collect(Collectors.toSet()));
-        Map<String, Integer> recentCountsByRoomId = recentMessageCounter.countRecentMessagesByRoomIds(
-                rooms.stream().map(Room::getId).filter(java.util.Objects::nonNull).toList());
-
         List<RoomResponse> roomResponses = rooms.stream()
-            .map(room -> mapToRoomResponse(room, name, usersById,
-                    recentCountsByRoomId.getOrDefault(room.getId(), 0)))
+            .map(room -> mapToRoomResponse(room, name, usersById))
             .toList();
 
         String nextCursor = null;
@@ -153,7 +148,7 @@ public class RoomService {
         // Publish event for room created
         try {
             RoomResponse roomResponse = mapToRoomResponse(
-                savedRoom, name, findUsersByIds(java.util.Set.of(creator.getId())), 0);
+                savedRoom, name, findUsersByIds(java.util.Set.of(creator.getId())));
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
@@ -199,8 +194,7 @@ public class RoomService {
                         : room.getParticipantIds().stream())
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet()));
-            RoomResponse roomResponse = mapToRoomResponse(room, name, usersById,
-                    recentMessageCounter.countRecentMessages(room.getId()));
+            RoomResponse roomResponse = mapToRoomResponse(room, name, usersById);
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
         } catch (Exception e) {
             log.error("roomUpdate 이벤트 발행 실패", e);
@@ -210,11 +204,6 @@ public class RoomService {
     }
 
     private RoomResponse mapToRoomResponse(Room room, String name, Map<String, User> usersById) {
-        return mapToRoomResponse(room, name, usersById, recentMessageCounter.countRecentMessages(room.getId()));
-    }
-
-    private RoomResponse mapToRoomResponse(
-            Room room, String name, Map<String, User> usersById, int recentMessageCount) {
         if (room == null) return null;
 
         User creator = room.getCreator() == null ? null : usersById.get(room.getCreator());
@@ -243,7 +232,6 @@ public class RoomService {
                 .collect(Collectors.toList()))
             .createdAtDateTime(room.getCreatedAt())
             .isCreator(creator != null && creator.getId().equals(name))
-            .recentMessageCount(recentMessageCount)
             .build();
     }
 
