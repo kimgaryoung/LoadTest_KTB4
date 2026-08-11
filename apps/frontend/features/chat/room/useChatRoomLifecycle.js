@@ -74,8 +74,6 @@ export const useChatRoomLifecycle = ({
     mountedRef.current = true;
 
     return () => {
-      mountedRef.current = false;
-
       if (loadMoreTimeoutRef.current) {
         clearTimeout(loadMoreTimeoutRef.current);
       }
@@ -83,6 +81,8 @@ export const useChatRoomLifecycle = ({
       if (socketRef.current?.connected && roomId && !cleanupInProgressRef.current) {
         cleanupRef.current(CLEANUP_REASONS.UNMOUNT);
       }
+
+      mountedRef.current = false;
     };
   }, [
     roomId,

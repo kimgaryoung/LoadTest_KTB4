@@ -84,6 +84,7 @@ export const useChatRoom = ({ roomId, onNavigate, onReplace, asPath }) => {
       // Socket cleanup
       if (roomId && socketRef.current?.connected) {
         socketClient.tryLeaveRoom(roomId, socketRef.current);
+        userRooms.current.delete(socketRef.current.id);
       }
 
       // Clear timeouts
