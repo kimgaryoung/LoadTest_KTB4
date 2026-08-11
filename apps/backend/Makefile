@@ -123,8 +123,10 @@ setup-env:
 
 dev: setup-env verify-docker
 	@echo "Starting application with Testcontainers..."
+	# spring-boot:test-run loads src/test/resources/application.properties, where
+	# Socket.IO is disabled to isolate tests. The dev process must override this.
 	@$(SDKMAN_INIT) && \
-	./mvnw compile spring-boot:test-run \
+	SOCKETIO_ENABLED=true ./mvnw compile spring-boot:test-run \
 		-Dspring-boot.run.profiles=dev \
 		-Dspring-boot.run.jvmArguments="$(JVM_OPTS)"
 
