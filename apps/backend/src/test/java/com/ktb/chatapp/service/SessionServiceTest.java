@@ -1,6 +1,7 @@
 package com.ktb.chatapp.service;
 
 import com.ktb.chatapp.config.MongoTestContainer;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,9 @@ class SessionServiceTest {
 
     @Autowired
     private SessionService sessionService;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     private static final String TEST_USER_ID = "test-user-123";
     private static final String TEST_USER_ID_2 = "test-user-456";
@@ -399,5 +403,27 @@ class SessionServiceTest {
         assertTrue(validated.isValid());
         assertEquals(created.getSessionData().getUserId(), validated.getSession().getUserId());
         assertEquals(created.getSessionData().getSessionId(), validated.getSession().getSessionId());
+    }
+
+    @Test
+    @DisplayName("Mongo 세션 저장소 연산과 검증 결과 지표 기록")
+    void mongoSessionStore_RecordsMetrics() {
+        SessionCreationResult created = sessionService.createSession(TEST_USER_ID, createTestMetadata());
+        sessionService.validateSession(TEST_USER_ID, created.getSessionId());
+
+        assertThat(meterRegistry.get("session.store.operations")
+                .tag("store", "mongo")
+                .tag("operation", "validate_touch")
+                .tag("outcome", "success")
+                .counter().count()).isPositive();
+        assertThat(meterRegistry.get("session.store.operation.duration")
+                .tag("store", "mongo")
+                .tag("operation", "validate_touch")
+                .tag("outcome", "success")
+                .timer().count()).isPositive();
+        assertThat(meterRegistry.get("session.store.validations")
+                .tag("store", "mongo")
+                .tag("result", "valid")
+                .counter().count()).isPositive();
     }
 }
