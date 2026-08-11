@@ -69,7 +69,7 @@ class MessageLoaderIntegrationTest {
                 .into(new ArrayList<>());
 
         Document index = indexes.stream()
-                .filter(candidate -> "room_timestamp_desc_idx".equals(candidate.getString("name")))
+                .filter(candidate -> "idx_messages_room_timestamp_desc".equals(candidate.getString("name")))
                 .findFirst()
                 .orElseThrow();
 
