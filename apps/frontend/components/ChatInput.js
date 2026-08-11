@@ -24,6 +24,10 @@ const ChatInput = forwardRef(({
   const emojiButtonRef = useRef(null);
   const dropZoneRef = useRef(null);
   const internalInputRef = useRef(null);
+  // Korean/Japanese/Chinese IMEs emit Enter to finish a composition before the
+  // user presses Enter to send. Keep this outside React state so the keydown
+  // handler observes it synchronously.
+  const isComposingRef = useRef(false);
   const messageInputRef = ref || internalInputRef;
 
   const {
@@ -280,6 +284,14 @@ const ChatInput = forwardRef(({
   }, [insertMention, messageInputRef]);
 
   const handleKeyDown = useCallback((e) => {
+    // `keyCode === 229` is emitted by Chromium during an active IME
+    // composition. `nativeEvent.isComposing` covers modern browsers, while
+    // the ref covers the same event sequence in component libraries that do
+    // not forward that native flag.
+    if (e.nativeEvent.isComposing || e.keyCode === 229 || isComposingRef.current) {
+      return;
+    }
+
     if (showMentionList) {
       const participants = getFilteredParticipants(room); // room 객체 전달
       const participantsCount = participants.length;
@@ -410,6 +422,12 @@ const ChatInput = forwardRef(({
                   value={message}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  onCompositionStart={() => {
+                    isComposingRef.current = true;
+                  }}
+                  onCompositionEnd={() => {
+                    isComposingRef.current = false;
+                  }}
                   placeholder={isDragging ? "파일을 여기에 놓아주세요." : "메시지를 입력하세요... (@를 입력하여 멘션, Shift + Enter로 줄바꿈)"}
                   disabled={isDisabled}
                   rows={1}
