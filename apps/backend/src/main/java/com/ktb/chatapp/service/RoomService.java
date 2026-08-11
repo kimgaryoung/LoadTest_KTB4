@@ -8,7 +8,6 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,55 +28,64 @@ public class RoomService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final RecentMessageCounter recentMessageCounter;
+    private final RoomCursorCodec roomCursorCodec;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
 
-    public RoomsResponse getAllRooms(String name) {
-
-        try {
-            // 전체 방을 조회해 최신순으로 정렬한다
-            List<Room> rooms = roomRepository.findAll();
-            Map<String, User> usersById = findUsersByIds(rooms.stream()
-                .flatMap(room -> java.util.stream.Stream.concat(
-                    java.util.stream.Stream.ofNullable(room.getCreator()),
-                    room.getParticipantIds() == null
-                        ? java.util.stream.Stream.empty()
-                        : room.getParticipantIds().stream()))
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet()));
-            Map<String, Integer> recentCountsByRoomId = recentMessageCounter.countRecentMessagesByRoomIds(
-                    rooms.stream().map(Room::getId).filter(java.util.Objects::nonNull).toList());
-
-            List<RoomResponse> roomResponses = rooms.stream()
-                .map(room -> mapToRoomResponse(room, name, usersById,
-                        recentCountsByRoomId.getOrDefault(room.getId(), 0)))
-                .sorted(Comparator.comparing(
-                    RoomResponse::getCreatedAtDateTime,
-                    Comparator.nullsLast(Comparator.reverseOrder())))
-                .collect(Collectors.toList());
-
-            PageMetadata metadata = PageMetadata.builder()
-                .total(roomResponses.size())
-                .page(0)
-                .pageSize(roomResponses.size())
-                .totalPages(1)
-                .hasMore(false)
-                .currentCount(roomResponses.size())
-                .build();
-
-            return RoomsResponse.builder()
-                .success(true)
-                .data(roomResponses)
-                .metadata(metadata)
-                .build();
-
-        } catch (Exception e) {
-            log.error("방 목록 조회 에러", e);
-            return RoomsResponse.builder()
-                .success(false)
-                .data(List.of())
-                .build();
+    public RoomsResponse getRooms(String name, int limit, String cursor) {
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("limit은 1 이상 100 이하여야 합니다.");
         }
+
+        RoomCursorCodec.RoomCursor decodedCursor = roomCursorCodec.decode(cursor);
+        LocalDateTime cursorCreatedAt = decodedCursor == null ? null : decodedCursor.createdAt();
+        String cursorRoomId = decodedCursor == null ? null : decodedCursor.roomId();
+
+        List<Room> fetchedRooms = roomRepository.findPageAfter(
+                cursorCreatedAt, cursorRoomId, limit + 1);
+        boolean hasMore = fetchedRooms.size() > limit;
+        List<Room> rooms = hasMore
+                ? fetchedRooms.subList(0, limit)
+                : fetchedRooms;
+
+        Map<String, User> usersById = findUsersByIds(rooms.stream()
+            .flatMap(room -> java.util.stream.Stream.concat(
+                java.util.stream.Stream.ofNullable(room.getCreator()),
+                room.getParticipantIds() == null
+                    ? java.util.stream.Stream.empty()
+                    : room.getParticipantIds().stream()))
+            .filter(java.util.Objects::nonNull)
+            .collect(Collectors.toSet()));
+        Map<String, Integer> recentCountsByRoomId = recentMessageCounter.countRecentMessagesByRoomIds(
+                rooms.stream().map(Room::getId).filter(java.util.Objects::nonNull).toList());
+
+        List<RoomResponse> roomResponses = rooms.stream()
+            .map(room -> mapToRoomResponse(room, name, usersById,
+                    recentCountsByRoomId.getOrDefault(room.getId(), 0)))
+            .toList();
+
+        String nextCursor = null;
+        if (hasMore && !rooms.isEmpty()) {
+            Room lastRoom = rooms.getLast();
+            nextCursor = roomCursorCodec.encode(lastRoom.getCreatedAt(), lastRoom.getId());
+        }
+
+        PageMetadata metadata = PageMetadata.builder()
+            .pageSize(limit)
+            .hasMore(hasMore)
+            .currentCount(roomResponses.size())
+            .nextCursor(nextCursor)
+            .sort(PageMetadata.SortInfo.builder()
+                    .field("createdAt,_id")
+                    .order("desc")
+                    .build())
+            .build();
+
+        return RoomsResponse.builder()
+            .success(true)
+            .data(roomResponses)
+            .metadata(metadata)
+            .build();
     }
 
     public HealthResponse getHealthStatus() {
