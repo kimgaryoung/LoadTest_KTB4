@@ -18,6 +18,7 @@ export const useRoomList = ({
   const [joiningRoom, setJoiningRoom] = useState(false);
 
   const isLoadingRef = useRef(false);
+  const navigationFallbackRef = useRef(null);
 
   const handleFetchError = useCallback((error) => {
     let errorMessage = '채팅방 목록을 불러오는데 실패했습니다.';
@@ -139,10 +140,36 @@ export const useRoomList = ({
     setJoiningRoom(true);
 
     try {
+      const roomPath = `/chat/${roomId}`;
+
+      // Start loading the room route while the join API is in flight. Under a
+      // browser spike this prevents the post-join transition from waiting on
+      // a cold dynamic route bundle.
+      router.prefetch?.(roomPath);
+
       const response = await axiosInstance.post(`/api/rooms/${roomId}/join`, {});
 
       if (response.data.success) {
-        router.push(`/chat/${roomId}`);
+        // App Router navigation is normally instant. Under a browser spike it
+        // can be delayed behind concurrent room-list socket updates, leaving
+        // a successfully joined user stranded on `/chat`. Keep recovery in
+        // the App Router: a full document reload spends additional time
+        // booting Next.js and can exceed the E2E's five-second URL budget.
+        router.push(roomPath);
+
+        if (typeof window !== 'undefined') {
+          if (navigationFallbackRef.current) {
+            window.clearTimeout(navigationFallbackRef.current);
+          }
+
+          navigationFallbackRef.current = window.setTimeout(() => {
+            navigationFallbackRef.current = null;
+
+            if (window.location.pathname === '/chat') {
+              router.replace(roomPath);
+            }
+          }, 700);
+        }
       }
     } catch (error) {
       let errorMessage = '입장에 실패했습니다.';
