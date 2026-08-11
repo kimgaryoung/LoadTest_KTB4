@@ -50,7 +50,6 @@ describe('chatRoomReducer', () => {
 
     expect(chatRoomReducer(state, { type: 'room/cleanupManual' })).toMatchObject({
       messages: [],
-      normalizedMessages: { ids: [], byId: {} },
       error: null,
       loading: false,
       loadingMessages: false,
@@ -96,39 +95,13 @@ describe('chatRoomReducer', () => {
       room: { _id: 'room-1' },
     });
 
-    const messageChangedState = chatRoomReducer(state, {
-      type: 'messages/changed',
-      messages: [{ _id: 'message-1' }],
-    });
-
-    expect(messageChangedState).toMatchObject({
-      messages: [{ _id: 'message-1' }],
-      normalizedMessages: {
-        ids: ['message-1'],
-        byId: {
-          'message-1': { _id: 'message-1' },
-        },
-      },
-    });
-
     expect(
       chatRoomReducer(state, {
-        type: 'messages/normalizedChanged',
-        normalizedMessages: {
-          ids: ['message-2'],
-          byId: {
-            'message-2': { _id: 'message-2' },
-          },
-        },
+        type: 'messages/changed',
+        messages: [{ _id: 'message-1' }],
       })
     ).toMatchObject({
-      messages: [{ _id: 'message-2' }],
-      normalizedMessages: {
-        ids: ['message-2'],
-        byId: {
-          'message-2': { _id: 'message-2' },
-        },
-      },
+      messages: [{ _id: 'message-1' }],
     });
 
     expect(
@@ -199,7 +172,6 @@ describe('useChatRoomState', () => {
       connectionStatus: 'checking',
       hasMoreMessages: true,
       loadingMessages: false,
-      normalizedMessages: { ids: [], byId: {} },
     });
     expect(result.current.refs.mountedRef.current).toBe(true);
     expect(result.current.refs.userRooms.current).toBeInstanceOf(Map);
@@ -217,12 +189,6 @@ describe('useChatRoomState', () => {
       connectionStatus: 'connected',
       room: { _id: 'room-1' },
       messages: [{ _id: 'message-1' }],
-      normalizedMessages: {
-        ids: ['message-1'],
-        byId: {
-          'message-1': { _id: 'message-1' },
-        },
-      },
       error: 'room error',
     });
     expect(result.current.actions.dispatch).toBeUndefined();
@@ -230,6 +196,5 @@ describe('useChatRoomState', () => {
     expect(result.current.actions.setIsInitialized).toBeUndefined();
     expect(result.current.actions.setConnectionStatus).toBeUndefined();
     expect(result.current.actions.setMessageLoadError).toBeUndefined();
-    expect(result.current.actions.setNormalizedMessages).toEqual(expect.any(Function));
   });
 });

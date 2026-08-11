@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import SystemMessage from './SystemMessage';
 import FileMessage from './FileMessage';
 import UserMessage from './UserMessage';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
 const LoadingIndicator = React.memo(() => (
   <div className="loading-messages">
@@ -30,18 +31,22 @@ EmptyMessages.displayName = 'EmptyMessages';
 
 const ChatMessages = ({
   messages = [],
-  messageIds,
-  messagesById,
   currentUser = null,
   room = null,
   loadingMessages = false,
   hasMoreMessages = true,
   onReactionAdd = () => {},
   onReactionRemove = () => {},
-  onLoadMore = () => {},
-  onVisibleMessagesRead = () => {}
+  onLoadMore = () => {}
 }) => {
   const currentUserId = currentUser?.id;
+
+  // 무한 스크롤 훅
+  const { sentinelRef } = useInfiniteScroll(
+    onLoadMore,
+    hasMoreMessages,
+    loadingMessages
+  );
 
   const containerRef = useRef(null);
   const [scrollElement, setScrollElement] = useState(null);
@@ -50,8 +55,6 @@ const ChatMessages = ({
   const previousLatestMessageKeyRef = useRef(null);
   const previousLoadingMessagesRef = useRef(false);
   const previousLoadAnchorRef = useRef(null);
-  const requestedReadMessageIdsRef = useRef(new Set());
-  const requestedLoadAtLengthRef = useRef(null);
 
   const setContainerRef = useCallback((node) => {
     containerRef.current = node;
@@ -67,39 +70,19 @@ const ChatMessages = ({
     );
   }, [currentUserId]);
 
-  const fallbackMessageIds = useMemo(
-    () => (Array.isArray(messages) ? messages.map(message => message?._id || message?.timestamp) : []),
+  // Message state is kept in chronological order by useMessageList.
+  // Avoid copying and sorting the full history whenever the state array changes.
+  const allMessages = useMemo(
+    () => (Array.isArray(messages) ? messages : []),
     [messages]
   );
-  const fallbackMessagesById = useMemo(() => {
-    if (!Array.isArray(messages)) {
-      return {};
-    }
-
-    return messages.reduce((acc, message) => {
-      const key = message?._id || message?.timestamp;
-      if (key) {
-        acc[key] = message;
-      }
-      return acc;
-    }, {});
-  }, [messages]);
-
-  const orderedMessageIds = Array.isArray(messageIds) ? messageIds : fallbackMessageIds;
-  const messageByIdLookup = messagesById || fallbackMessagesById;
-  const messageCount = orderedMessageIds.length;
-
-  const getMessageAtIndex = useCallback((index) => {
-    const messageId = orderedMessageIds[index];
-    return messageId ? messageByIdLookup[messageId] : undefined;
-  }, [messageByIdLookup, orderedMessageIds]);
 
   // TanStack Virtual returns imperative helpers that React Compiler cannot memoize safely.
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
-    count: messageCount,
+    count: allMessages.length,
     getScrollElement: () => scrollElement,
-    getItemKey: (index) => orderedMessageIds[index] || `msg-${index}`,
+    getItemKey: (index) => allMessages[index]?._id || `msg-${index}`,
     estimateSize: () => 128,
     overscan: 8,
     initialRect: {
@@ -110,66 +93,14 @@ const ChatMessages = ({
   const measuredVirtualRows = rowVirtualizer.getVirtualItems();
   const virtualRows = measuredVirtualRows.length > 0
     ? measuredVirtualRows
-    : orderedMessageIds.slice(0, 14).map((messageId, index) => ({
+    : allMessages.slice(0, 14).map((message, index) => ({
         index,
-        key: messageId || `msg-${index}`,
+        key: message?._id || `msg-${index}`,
         start: index * 128,
       }));
-  const totalVirtualSize = rowVirtualizer.getTotalSize() || messageCount * 128;
-  const latestMessage = getMessageAtIndex(messageCount - 1);
+  const totalVirtualSize = rowVirtualizer.getTotalSize() || allMessages.length * 128;
+  const latestMessage = allMessages[allMessages.length - 1];
   const latestMessageKey = latestMessage?._id || latestMessage?.timestamp;
-
-  useEffect(() => {
-    if (!hasMoreMessages || loadingMessages || virtualRows.length === 0) {
-      return;
-    }
-
-    const firstVisibleIndex = virtualRows[0]?.index;
-    if (
-      firstVisibleIndex <= 1
-      && requestedLoadAtLengthRef.current !== messageCount
-    ) {
-      requestedLoadAtLengthRef.current = messageCount;
-      onLoadMore();
-    }
-  }, [hasMoreMessages, loadingMessages, messageCount, onLoadMore, virtualRows]);
-
-  useEffect(() => {
-    if (!currentUserId || virtualRows.length === 0) {
-      return;
-    }
-
-    const visibleUnreadMessageIds = virtualRows
-      .map(virtualRow => getMessageAtIndex(virtualRow.index))
-      .filter((message) => {
-        if (!message?._id || message.type === 'system') {
-          return false;
-        }
-
-        if (requestedReadMessageIdsRef.current.has(message._id)) {
-          return false;
-        }
-
-        const senderId = message.sender?._id || message.sender?.id || message.sender;
-        if (senderId === currentUserId) {
-          return false;
-        }
-
-        return !message.readers?.some(reader => (
-          reader.userId === currentUserId || reader._id === currentUserId
-        ));
-      })
-      .map(message => message._id);
-
-    if (visibleUnreadMessageIds.length === 0) {
-      return;
-    }
-
-    visibleUnreadMessageIds.forEach((messageId) => {
-      requestedReadMessageIdsRef.current.add(messageId);
-    });
-    onVisibleMessagesRead(visibleUnreadMessageIds);
-  }, [currentUserId, getMessageAtIndex, onVisibleMessagesRead, virtualRows]);
 
   const getIsNearBottom = useCallback(() => {
     if (!scrollElement) return true;
@@ -205,7 +136,7 @@ const ChatMessages = ({
   }, [roomKey]);
 
   useLayoutEffect(() => {
-    if (!scrollElement || messageCount === 0 || loadingMessages) {
+    if (!scrollElement || allMessages.length === 0 || loadingMessages) {
       return undefined;
     }
 
@@ -218,7 +149,7 @@ const ChatMessages = ({
     const scrollToLatestMessage = () => {
       if (cancelled) return;
 
-      rowVirtualizer.scrollToIndex(messageCount - 1, {
+      rowVirtualizer.scrollToIndex(allMessages.length - 1, {
         align: 'end',
         behavior: 'auto',
       });
@@ -241,17 +172,17 @@ const ChatMessages = ({
         cancelAnimationFrame(frameId);
       });
     };
-  }, [latestMessageKey, loadingMessages, messageCount, rowVirtualizer, scrollElement]);
+  }, [allMessages.length, latestMessageKey, loadingMessages, rowVirtualizer, scrollElement]);
 
   useLayoutEffect(() => {
-    if (!scrollElement || messageCount === 0) {
+    if (!scrollElement || allMessages.length === 0) {
       previousLoadingMessagesRef.current = loadingMessages;
       return undefined;
     }
 
     if (loadingMessages && !previousLoadingMessagesRef.current) {
       const firstVisibleRow = rowVirtualizer.getVirtualItems()[0];
-      const firstVisibleMessage = getMessageAtIndex(firstVisibleRow?.index ?? 0);
+      const firstVisibleMessage = allMessages[firstVisibleRow?.index ?? 0];
 
       previousLoadAnchorRef.current = firstVisibleMessage
         ? {
@@ -276,7 +207,9 @@ const ChatMessages = ({
           scrollElement.scrollTop = anchor.scrollTop + heightDifference;
         }
 
-        const anchorIndex = orderedMessageIds.indexOf(anchor.key);
+        const anchorIndex = allMessages.findIndex((message) => (
+          (message._id || message.timestamp) === anchor.key
+        ));
 
         if (anchorIndex >= 0) {
           rowVirtualizer.scrollToIndex(anchorIndex, {
@@ -300,7 +233,7 @@ const ChatMessages = ({
 
     previousLoadingMessagesRef.current = loadingMessages;
     return undefined;
-  }, [getMessageAtIndex, loadingMessages, messageCount, orderedMessageIds, rowVirtualizer, scrollElement]);
+  }, [allMessages, loadingMessages, rowVirtualizer, scrollElement]);
 
   useLayoutEffect(() => {
     if (!scrollElement || !latestMessageKey || loadingMessages) {
@@ -327,7 +260,7 @@ const ChatMessages = ({
     }
 
     const frameId = requestAnimationFrame(() => {
-      rowVirtualizer.scrollToIndex(messageCount - 1, {
+      rowVirtualizer.scrollToIndex(allMessages.length - 1, {
         align: 'end',
         behavior: 'auto',
       });
@@ -335,11 +268,11 @@ const ChatMessages = ({
 
     return () => cancelAnimationFrame(frameId);
   }, [
+    allMessages.length,
     currentUserId,
     latestMessage,
     latestMessageKey,
     loadingMessages,
-    messageCount,
     rowVirtualizer,
     scrollElement,
   ]);
@@ -393,8 +326,10 @@ const ChatMessages = ({
       aria-atomic="false"
       data-testid="chat-messages-container"
     >
+      {/* Sentinel 요소 - 스크롤 맨 위에 배치하여 위로 스크롤 시 이전 메시지 로드 */}
       {hasMoreMessages && (
         <div
+          ref={sentinelRef}
           style={{
             height: '20px',
             margin: '10px 0',
@@ -407,11 +342,11 @@ const ChatMessages = ({
         </div>
       )}
 
-      {!hasMoreMessages && messageCount > 0 && (
+      {!hasMoreMessages && messages.length > 0 && (
         <MessageHistoryEnd />
       )}
 
-      {messageCount === 0 ? (
+      {allMessages.length === 0 ? (
         <EmptyMessages />
       ) : (
         <div
@@ -422,7 +357,7 @@ const ChatMessages = ({
           }}
         >
           {virtualRows.map((virtualRow) => {
-            const msg = getMessageAtIndex(virtualRow.index);
+            const msg = allMessages[virtualRow.index];
 
             return (
               <div

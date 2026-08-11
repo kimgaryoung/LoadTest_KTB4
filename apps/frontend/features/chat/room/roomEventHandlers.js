@@ -1,22 +1,14 @@
 import {
+  deriveUniqueSortedMessages,
   insertUniqueChronologicalMessage,
 } from '../messages/useMessageList';
-import {
-  insertNormalizedMessage,
-  mergeNormalizedMessages,
-  normalizeMessages,
-  selectMessagesArray,
-  updateNormalizedMessageById,
-} from '../messages/normalizedMessages';
 
 export const processLoadedRoomMessages = ({
   loadedMessages,
   hasMore,
   isInitialLoad = false,
   processedMessageIds,
-  normalizedMessages,
   setMessages,
-  setNormalizedMessages,
   setHasMoreMessages,
   initialLoadCompletedRef,
 }) => {
@@ -33,19 +25,11 @@ export const processLoadedRoomMessages = ({
   });
   processedMessageIds.current = nextProcessedMessageIds;
 
-  const currentNormalizedMessages = normalizedMessages || normalizeMessages([]);
-  const result = mergeNormalizedMessages(
-    currentNormalizedMessages,
-    loadedMessages,
-    processedSnapshot
-  );
-  const nextMessages = selectMessagesArray(result.messages);
-
-  if (setNormalizedMessages) {
-    setNormalizedMessages(result.messages);
-  } else {
-    setMessages(nextMessages);
-  }
+  let nextMessages;
+  setMessages(prev => {
+    nextMessages = deriveUniqueSortedMessages(prev, loadedMessages, processedSnapshot).messages;
+    return nextMessages;
+  });
   setHasMoreMessages(hasMore);
 
   if (isInitialLoad) {
@@ -80,39 +64,8 @@ export const applyReadReceipts = (messages, { userId, messageIds, timestamp }) =
   return changed ? nextMessages : messages;
 };
 
-export const applyReadReceiptsToNormalizedMessages = (
-  normalizedMessages,
-  { userId, messageIds, timestamp }
-) => {
-  let nextMessages = normalizedMessages;
-
-  messageIds.forEach((messageId) => {
-    nextMessages = updateNormalizedMessageById(nextMessages, messageId, (message) => {
-      const alreadyRead = message.readers?.some(reader =>
-        reader.userId === userId || reader._id === userId
-      );
-
-      if (alreadyRead) {
-        return message;
-      }
-
-      return {
-        ...message,
-        readers: [...(message.readers || []), { userId, readAt: timestamp || new Date() }],
-      };
-    });
-  });
-
-  return nextMessages;
-};
-
-
 export const appendIncomingMessage = (messages, incoming) => {
   return insertUniqueChronologicalMessage(messages, incoming);
-};
-
-export const appendIncomingNormalizedMessage = (normalizedMessages, incoming) => {
-  return insertNormalizedMessage(normalizedMessages, incoming);
 };
 
 export const createRoomEventHandlers = ({
@@ -123,7 +76,6 @@ export const createRoomEventHandlers = ({
   processMessages,
   setRoom,
   setMessages,
-  setNormalizedMessages,
   setLoadingMessages,
   setError,
   setHasMoreMessages,
@@ -160,20 +112,12 @@ export const createRoomEventHandlers = ({
     },
     onMessagesRead: (payload) => {
       if (!mountedRef.current) return;
-      if (setNormalizedMessages) {
-        setNormalizedMessages(prev => applyReadReceiptsToNormalizedMessages(prev, payload));
-        return;
-      }
       setMessages(prev => applyReadReceipts(prev, payload));
     },
     onMessage: (incoming) => {
       if (!mountedRef.current || messageProcessingRef.current) return;
       if (!incoming?._id || processedMessageIds.current.has(incoming._id)) return;
       processedMessageIds.current.add(incoming._id);
-      if (setNormalizedMessages) {
-        setNormalizedMessages(prev => appendIncomingNormalizedMessage(prev, incoming));
-        return;
-      }
       setMessages(prev => appendIncomingMessage(prev, incoming));
     },
     onPreviousMessagesLoaded: handlePreviousMessages,
